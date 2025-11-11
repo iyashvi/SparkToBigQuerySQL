@@ -16,4 +16,4 @@ build/
 out/
 !**/src/main/**/out/
 !**/src/test/**/out/
-src/main/resources
+src/main/resources/application.properties

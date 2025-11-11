@@ -3,6 +3,11 @@ package com.capstone.service;
 import com.capstone.dto.QueryResponse;
 //import com.capstone.parser.PlanParser;
 //import com.capstone.transformer.PlanToBigQueryTransformer;
+import com.capstone.extractor.SparkPlanExtractor;
+import com.capstone.model.SparkPlanNode;
+import com.capstone.parser.PlanWalker;
+import com.capstone.parser.SparkPlanParser;
+import com.capstone.transformer.SelectConverter;
 import org.springframework.stereotype.Service;
 import org.apache.spark.sql.*;
 
@@ -10,9 +15,16 @@ import java.util.*;
 
 @Service
 public class SparkPlanService {
-//    private final PlanParser parser;
-//    private final PlanToBigQueryTransformer transformer;
+    private final SparkPlanExtractor extractor;
+    private final SparkPlanParser parser;
+    private final SelectConverter selectConverter;
     private SparkSession spark;
+
+    public SparkPlanService(SparkPlanExtractor extractor, SparkPlanParser parser, SelectConverter selectConverter) {
+        this.extractor = extractor;
+        this.parser = parser;
+        this.selectConverter = selectConverter;
+    }
 
     private synchronized SparkSession getSparkSession() {
         if (spark == null) {
@@ -54,9 +66,15 @@ public class SparkPlanService {
             resp.setOptimizedPlanText(optimized);
             resp.setPhysicalPlanText(physical);
 
-//            PlanNode root = parser.parse(logical);
-//            String bigQuerySql = transformer.transform(root);
-//            resp.setBigQuerySql(bigQuerySql);
+            SparkPlanNode root = parser.parse(logical);
+
+            // 3. Walk nodes using visitor
+            PlanWalker walker = new PlanWalker();
+            walker.walk(root, selectConverter);
+
+            // 4. Return transformed query
+            String bigQuerySql = selectConverter.getQuery();
+            resp.setBigQuerySql(bigQuerySql);
         }
         catch (Exception e) {
             warnings.add("Error while analyzing query: " + e.getMessage());

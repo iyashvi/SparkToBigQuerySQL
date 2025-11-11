@@ -1,8 +1,6 @@
 package com.capstone.service;
 
 import com.capstone.dto.QueryResponse;
-//import com.capstone.parser.PlanParser;
-//import com.capstone.transformer.PlanToBigQueryTransformer;
 import org.springframework.stereotype.Service;
 import org.apache.spark.sql.*;
 
@@ -10,8 +8,6 @@ import java.util.*;
 
 @Service
 public class SparkPlanService {
-//    private final PlanParser parser;
-//    private final PlanToBigQueryTransformer transformer;
     private SparkSession spark;
 
     private synchronized SparkSession getSparkSession() {
@@ -53,10 +49,6 @@ public class SparkPlanService {
             resp.setLogicalPlanText(logical);
             resp.setOptimizedPlanText(optimized);
             resp.setPhysicalPlanText(physical);
-
-//            PlanNode root = parser.parse(logical);
-//            String bigQuerySql = transformer.transform(root);
-//            resp.setBigQuerySql(bigQuerySql);
         }
         catch (Exception e) {
             warnings.add("Error while analyzing query: " + e.getMessage());

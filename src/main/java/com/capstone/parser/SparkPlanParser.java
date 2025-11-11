@@ -6,20 +6,36 @@ import org.springframework.stereotype.Component;
 public class SparkPlanParser {
 
     public SparkPlanNode parse(String planString) {
-        // Example Spark logical plan:
-        // "Project [name#0, age#1]\n+- Relation [name, age] employees"
 
         String[] lines = planString.split("\n");
         SparkPlanNode root = null;
 
         for (String line : lines) {
             line = line.trim();
+            System.out.println("==== PARSER DEBUG LINE: " + line);
 
-            if (line.startsWith("Project")) {
-                String expr = line.substring(line.indexOf("[") + 1, line.indexOf("]"));
+            if (line.startsWith("'Project")) {
+                // Extract between [ and ] → gives 'name, 'age
+                int start = line.indexOf('[');
+                int end = line.indexOf(']');
+                String expr = "";
+                if (start != -1 && end != -1 && end > start) {
+                    expr = line.substring(start + 1, end)
+                            .replace("'", "")
+                            .trim();
+                }
                 root = new SparkPlanNode("SELECT", expr);
-            } else if (line.startsWith("Relation")) {
-                String table = line.substring(line.lastIndexOf(" ") + 1);
+            }
+
+            else if (line.startsWith("+- 'UnresolvedRelation")) {
+                int start = line.indexOf('[');
+                int end = line.indexOf(']');
+                String table = "";
+                if (start != -1 && end != -1 && end > start) {
+                    table = line.substring(start + 1, end)
+                            .trim();
+                }
+
                 SparkPlanNode child = new SparkPlanNode("FROM", table);
                 if (root != null) root.addChild(child);
             }

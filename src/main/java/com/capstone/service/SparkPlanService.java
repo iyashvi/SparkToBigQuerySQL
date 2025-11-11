@@ -41,6 +41,8 @@ public class SparkPlanService {
         QueryResponse resp = new QueryResponse();
         List<String> warnings = new ArrayList<>();
         try {
+            getSparkSession().sql("CREATE OR REPLACE TEMP VIEW employees AS SELECT 'John' AS name, 30 AS age");
+
             Dataset<Row> df = getSparkSession().sql(sparkSql);
 
             String logical = "";
@@ -68,12 +70,16 @@ public class SparkPlanService {
 
             SparkPlanNode root = parser.parse(logical);
 
+            System.out.println("=====root: " + root);
+
             // 3. Walk nodes using visitor
             PlanWalker walker = new PlanWalker();
             walker.walk(root, selectConverter);
 
             // 4. Return transformed query
             String bigQuerySql = selectConverter.getQuery();
+            System.out.println("=====bigquery: " + bigQuerySql);
+
             resp.setBigQuerySql(bigQuerySql);
         }
         catch (Exception e) {

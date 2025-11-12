@@ -1,8 +1,6 @@
 package com.capstone.service;
 
 import com.capstone.dto.QueryResponse;
-//import com.capstone.parser.PlanParser;
-//import com.capstone.transformer.PlanToBigQueryTransformer;
 import com.capstone.extractor.SparkPlanExtractor;
 import com.capstone.model.SparkPlanNode;
 import com.capstone.parser.PlanWalker;
@@ -17,67 +15,57 @@ import java.util.*;
 public class SparkPlanService {
     private final SparkPlanExtractor extractor;
     private final SparkPlanParser parser;
-    private final SelectConverter selectConverter;
-    private SparkSession spark;
+    private final SparkSession spark;
 
-    public SparkPlanService(SparkPlanExtractor extractor, SparkPlanParser parser, SelectConverter selectConverter) {
+    public SparkPlanService(SparkPlanExtractor extractor, SparkPlanParser parser, SparkSession sparkSession) {
         this.extractor = extractor;
         this.parser = parser;
-        this.selectConverter = selectConverter;
-    }
-
-    private synchronized SparkSession getSparkSession() {
-        if (spark == null) {
-            spark = SparkSession.builder()
-                    .appName("spark-to-bigquery-local")
-                    .master("local[*]")
-                    .config("spark.ui.enabled", "false")
-                    .getOrCreate();
-        }
-        return spark;
+        this.spark = sparkSession;  // Spring injects the SparkSession bean defined in SparkConfig
     }
 
     public QueryResponse translateSql(String sparkSql) {
         QueryResponse resp = new QueryResponse();
         List<String> warnings = new ArrayList<>();
         try {
-            getSparkSession().sql("CREATE OR REPLACE TEMP VIEW employees AS SELECT 'John' AS name, 30 AS age");
+            //spark.sql("CREATE TABLE Employees (EmployeeID INT, Name VARCHAR(100), Age INT, Department VARCHAR(50), SALARY DOUBLE)");
+            //spark.sql("INSERT INTO Employees (EmployeeID, Name, Age, Department, SALARY) VALUES (1, 'John Doe', 32, 'Sales', 52000), (2, 'Jane Smith', 28, 'Marketing', 45000), (3, 'Peter Jones', 46, 'HR', 60000)");
 
-            Dataset<Row> df = getSparkSession().sql(sparkSql);
+            spark.sql(
+                    "CREATE OR REPLACE TEMP VIEW Employees AS " +
+                            "SELECT 1 AS EmployeeID, 'John Doe' AS Name, 32 AS Age, 'Sales' AS Department, 52000.0 AS Salary " +
+                            "UNION ALL SELECT 2, 'Jane Smith', 28, 'Marketing', 45000.0 " +
+                            "UNION ALL SELECT 3, 'Peter Jones', 46, 'HR', 60000.0 " +
+                            "UNION ALL SELECT 4, 'Alice Brown', 35, 'Engineering', 75000.0"
+            );
+            spark.sql(sparkSql);
 
             String logical = "";
-            String optimized = "";
-            String physical = "";
             try {
-                Object qe = df.getClass().getMethod("queryExecution").invoke(df);
-                Object logicalPlan = qe.getClass().getMethod("logical").invoke(qe);
-                Object analyzed = qe.getClass().getMethod("analyzed").invoke(qe);
-                Object optimizedPlan = qe.getClass().getMethod("optimizedPlan").invoke(qe);
-                Object executed = qe.getClass().getMethod("executedPlan").invoke(qe);
-                logical = logicalPlan.toString();
-                optimized = optimizedPlan.toString();
-                physical = executed.toString();
-            } catch (Exception e) {
-                warnings.add("Could not call queryExecution() reflectively — falling back to explain(). For full fidelity, run with matching Spark runtime on classpath.");
-                logical = df.queryExecution().logical().toString();
-                optimized = df.queryExecution().optimizedPlan().toString();
-                physical = df.queryExecution().executedPlan().toString();
+                logical = extractor.extractLogicalPlan(sparkSql);
+                String optimized = extractor.extractOptimizedPlan(sparkSql);
+                String physical = extractor.extractPhysicalPlan(sparkSql);
+
+                resp.setLogicalPlanText(logical);
+                resp.setOptimizedPlanText(optimized);
+                resp.setPhysicalPlanText(physical);
+            }
+            catch (Exception e) {
+                warnings.add("Error extracting Spark plans: " + e.getMessage());
             }
 
-            resp.setLogicalPlanText(logical);
-            resp.setOptimizedPlanText(optimized);
-            resp.setPhysicalPlanText(physical);
-
+            System.out.println("Logical Plan ================= " + logical);
             SparkPlanNode root = parser.parse(logical);
 
-            System.out.println("=====root: " + root);
-
+            if (root == null) {
+                throw new IllegalStateException("Parsed plan is empty — no valid root node found.");
+            }
             // 3. Walk nodes using visitor
             PlanWalker walker = new PlanWalker();
-            walker.walk(root, selectConverter);
+            SelectConverter converter = new SelectConverter();
+            walker.walk(root, converter);
 
             // 4. Return transformed query
-            String bigQuerySql = selectConverter.getQuery();
+            String bigQuerySql = converter.getQuery();
             System.out.println("=====bigquery: " + bigQuerySql);
 
             resp.setBigQuerySql(bigQuerySql);

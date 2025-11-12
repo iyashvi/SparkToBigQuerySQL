@@ -18,4 +18,9 @@ public class SparkPlanNode {
     public void addChild(SparkPlanNode child) {
         this.children.add(child);
     }
+
+    @Override
+    public String toString() {  // For Debugging
+        return nodeType + "(" + expression + ")";
+    }
 }

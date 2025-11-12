@@ -1,6 +1,5 @@
 package com.capstone.parser;
 
-
 import com.capstone.model.SparkPlanNode;
 
 public abstract class PlanVisitor {

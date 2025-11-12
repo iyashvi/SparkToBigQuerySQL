@@ -18,5 +18,14 @@ public class SparkPlanExtractor {
         Dataset<Row> df = spark.sql(query);
         return df.queryExecution().logical().toString();
     }
-}
 
+    public String extractOptimizedPlan(String query) {
+        Dataset<Row> df = spark.sql(query);
+        return df.queryExecution().optimizedPlan().toString();
+    }
+
+    public String extractPhysicalPlan(String query) {
+        Dataset<Row> df = spark.sql(query);
+        return df.queryExecution().executedPlan().toString();
+    }
+}

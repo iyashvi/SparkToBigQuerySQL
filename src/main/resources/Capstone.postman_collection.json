@@ -1,0 +1,65 @@
+{
+	"info": {
+		"_postman_id": "1a41996f-ba44-4dcd-84a1-9f1f269b4d70",
+		"name": "Capstone",
+		"description": "### Welcome to Postman! This is your first collection. \n\nCollections are your starting point for building and testing APIs. You can use this one to:\n\n• Group related requests\n• Test your API in real-world scenarios\n• Document and share your requests\n\nUpdate the name and overview whenever you’re ready to make it yours.\n\n[Learn more about Postman Collections.](https://learning.postman.com/docs/collections/collections-overview/)",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+		"_exporter_id": "49753409",
+		"_collection_link": "https://yashvi-mudgal-7757849.postman.co/workspace/Yashvi-Mudgal's-Workspace~8cec787f-b2fb-4b79-8724-1b6e6c647ce2/collection/49753409-1a41996f-ba44-4dcd-84a1-9f1f269b4d70?action=share&source=collection_link&creator=49753409"
+	},
+	"item": [
+		{
+			"name": "Spark Query to BigQuery",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test(\"Successful POST request\", function () {",
+							"    pm.expect(pm.response.code).to.be.oneOf([200, 201]);",
+							"});",
+							""
+						],
+						"type": "text/javascript",
+						"packages": {},
+						"requests": {}
+					}
+				}
+			],
+			"request": {
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n\t\"name\": \"Add your name in the body\"\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "{{hostname}}/convert?inputpath=C:/Users/DELL/Desktop/NuoData/ssis-to-pyspark/input&outputpath=C:/Users/DELL/Desktop/NuoData/ssis-to-pyspark/outputC:\\Users\\HP\\Desktop\\Nuodata",
+					"host": [
+						"{{hostname}}"
+					],
+					"path": [
+						"convert"
+					],
+					"query": [
+						{
+							"key": "inputpath",
+							"value": "C:/Users/DELL/Desktop/NuoData/ssis-to-pyspark/input"
+						},
+						{
+							"key": "outputpath",
+							"value": "C:/Users/DELL/Desktop/NuoData/ssis-to-pyspark/outputC:\\Users\\HP\\Desktop\\Nuodata"
+						}
+					]
+				},
+				"description": "This is a POST request, submitting data to an API via the request body. This request submits JSON data, and the data is reflected in the response.\n\nA successful POST request typically returns a `200 OK` or `201 Created` response code."
+			},
+			"response": []
+		}
+	]
+}

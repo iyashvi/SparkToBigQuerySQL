@@ -8,21 +8,54 @@ import org.springframework.stereotype.Component;
 public class SelectConverter extends PlanVisitor {
 
     private final StringBuilder queryBuilder = new StringBuilder();
+    private String selectExpr = "";
+    private String fromExpr = "";
+    private String whereExpr = "";
+    private String orderExpr = "";
+    private String limitExpr = "";
 
     @Override
     public void visit(SparkPlanNode node) {
+        if (node == null) return;
+
         switch (node.getNodeType()) {
             case "SELECT":
-                queryBuilder.append("SELECT ").append(node.getExpression());
+                selectExpr = node.getExpression();
                 break;
             case "FROM":
-                queryBuilder.append(" FROM ").append(node.getExpression());
+                fromExpr = node.getExpression();
+                break;
+            case "WHERE":
+                whereExpr = node.getExpression();
+                break;
+            case "ORDER BY":
+                orderExpr = node.getExpression();
+                break;
+            case "LIMIT":
+                limitExpr = node.getExpression();
                 break;
         }
     }
 
     public String getQuery() {
-        return queryBuilder.toString();
+        queryBuilder.setLength(0);
+
+        if (!selectExpr.isEmpty()) queryBuilder.append("SELECT ").append(selectExpr);
+        if (!fromExpr.isEmpty()) queryBuilder.append(" FROM ").append(fromExpr);
+        if (!whereExpr.isEmpty()) queryBuilder.append(" WHERE ").append(whereExpr);
+        if (!orderExpr.isEmpty()) queryBuilder.append(" ORDER BY ").append(orderExpr);
+        if (!limitExpr.isEmpty()) queryBuilder.append(" LIMIT ").append(limitExpr);
+
+        return queryBuilder.toString().trim();
+    }
+
+    public void reset() {
+        queryBuilder.setLength(0);
+        selectExpr = "";
+        fromExpr = "";
+        whereExpr = "";
+        orderExpr = "";
+        limitExpr = "";
     }
 }
 

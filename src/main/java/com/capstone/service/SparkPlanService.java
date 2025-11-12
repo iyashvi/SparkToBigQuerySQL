@@ -13,6 +13,7 @@ import java.util.*;
 
 @Service
 public class SparkPlanService {
+
     private final SparkPlanExtractor extractor;
     private final SparkPlanParser parser;
     private final SparkSession spark;

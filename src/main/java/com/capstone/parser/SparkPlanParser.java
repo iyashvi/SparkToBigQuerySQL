@@ -126,8 +126,6 @@ public class SparkPlanParser {
         }
         return "unknown_group_columns";
     }
-
-
     private String extractAggregateFunctions(String line) {
         int firstEnd = line.indexOf(']');
         int secondStart = line.indexOf('[', firstEnd + 1);
@@ -142,7 +140,7 @@ public class SparkPlanParser {
                     .replace("#", "")
                     .trim();
 
-            // Clean up multiple aggregates
+
             aggPart = aggPart.replaceAll("\\s*,\\s*", ", ");
             aggPart = aggPart.replaceAll(",\\s*$", "");
             aggPart = aggPart.replaceAll("\\s+", " ");

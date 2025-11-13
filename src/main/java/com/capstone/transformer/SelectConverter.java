@@ -48,14 +48,4 @@ public class SelectConverter extends PlanVisitor {
 
         return queryBuilder.toString().trim();
     }
-
-    public void reset() {
-        queryBuilder.setLength(0);
-        selectExpr = "";
-        fromExpr = "";
-        whereExpr = "";
-        orderExpr = "";
-        limitExpr = "";
-    }
 }
-

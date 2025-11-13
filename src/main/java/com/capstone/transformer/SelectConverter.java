@@ -49,3 +49,4 @@ public class SelectConverter extends PlanVisitor {
         return queryBuilder.toString().trim();
     }
 }
+

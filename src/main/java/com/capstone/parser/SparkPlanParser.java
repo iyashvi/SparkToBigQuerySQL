@@ -17,6 +17,7 @@ public class SparkPlanParser {
 
             SparkPlanNode node = null;
 
+            // SELECT
             if (line.contains("Project")) {
                 String expr = extractValue(line).replace("'", "").trim();
                 node = new SparkPlanNode("SELECT", expr);

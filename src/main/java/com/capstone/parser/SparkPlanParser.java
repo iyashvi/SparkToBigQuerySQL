@@ -33,7 +33,6 @@ public class SparkPlanParser {
                 node = new SparkPlanNode("WHERE", extractFilterCondition(line));
             }
 
-
             // GROUP BY (Aggregate node)
             else if (line.startsWith("'Aggregate") || line.startsWith("Aggregate")) {
                 String groupExpr = extractGroupByColumns(line);
@@ -47,7 +46,6 @@ public class SparkPlanParser {
                 continue;
             }
 
-
             // ORDER BY
             else if (line.contains("Sort"))  {
                 node = new SparkPlanNode("ORDER BY", extractValue(line));
@@ -58,6 +56,7 @@ public class SparkPlanParser {
                 node = new SparkPlanNode("LIMIT", extractValue(line));
             }
 
+            // -- For Debugging
             if (node != null) {
                 System.out.println("=====node: " + node);
                 nodes.add(node);

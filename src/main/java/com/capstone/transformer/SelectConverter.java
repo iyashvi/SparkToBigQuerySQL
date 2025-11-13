@@ -12,6 +12,7 @@ public class SelectConverter extends PlanVisitor {
     private String fromExpr = "";
     private String whereExpr = "";
     private String groupExpr = "";
+    private String havingExpr = "";
     private String orderExpr = "";
     private String limitExpr = "";
 
@@ -32,6 +33,9 @@ public class SelectConverter extends PlanVisitor {
             case "GROUP BY":
                 groupExpr = node.getExpression();
                 break;
+            case "HAVING":
+                havingExpr = node.getExpression();
+                break;
             case "ORDER BY":
                 orderExpr = node.getExpression();
                 break;
@@ -48,19 +52,11 @@ public class SelectConverter extends PlanVisitor {
         if (!fromExpr.isEmpty()) queryBuilder.append(" FROM ").append(fromExpr);
         if (!whereExpr.isEmpty()) queryBuilder.append(" WHERE ").append(whereExpr);
         if (!groupExpr.isEmpty()) queryBuilder.append(" GROUP BY ").append(groupExpr);
+        if (!havingExpr.isEmpty()) queryBuilder.append(" HAVING ").append(havingExpr);
         if (!orderExpr.isEmpty()) queryBuilder.append(" ORDER BY ").append(orderExpr);
         if (!limitExpr.isEmpty()) queryBuilder.append(" LIMIT ").append(limitExpr);
 
         return queryBuilder.toString().trim();
     }
 
-    public void reset() {
-        queryBuilder.setLength(0);
-        selectExpr = "";
-        fromExpr = "";
-        whereExpr = "";
-        groupExpr = "";
-        orderExpr = "";
-        limitExpr = "";
-    }
 }

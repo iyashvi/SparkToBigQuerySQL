@@ -32,7 +32,6 @@ public class SparkPlanParser {
                 node = new SparkPlanNode("WHERE", extractFilterCondition(line));
             }
 
-
             // GROUP BY (Aggregate node)
             else if (line.startsWith("'Aggregate") || line.startsWith("Aggregate")) {
                 String groupExpr = extractGroupByColumns(line);
@@ -45,7 +44,6 @@ public class SparkPlanParser {
                 nodes.add(groupNode);
                 continue;
             }
-
 
             // ORDER BY
             else if (line.contains("Sort"))  {
@@ -126,8 +124,6 @@ public class SparkPlanParser {
         }
         return "unknown_group_columns";
     }
-
-
     private String extractAggregateFunctions(String line) {
         int firstEnd = line.indexOf(']');
         int secondStart = line.indexOf('[', firstEnd + 1);
@@ -142,7 +138,7 @@ public class SparkPlanParser {
                     .replace("#", "")
                     .trim();
 
-            // Clean up multiple aggregates
+
             aggPart = aggPart.replaceAll("\\s*,\\s*", ", ");
             aggPart = aggPart.replaceAll(",\\s*$", "");
             aggPart = aggPart.replaceAll("\\s+", " ");

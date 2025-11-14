@@ -7,7 +7,7 @@ import java.util.*;
 @Data
 public class SparkPlanNode {
     private final String nodeType;
-    private final String expression;
+    private  String expression;
     private final List<SparkPlanNode> children = new ArrayList<>();
 
     public SparkPlanNode(String nodeType, String expression) {

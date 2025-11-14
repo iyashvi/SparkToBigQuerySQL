@@ -2,6 +2,7 @@ package com.capstone.transformer;
 
 import com.capstone.model.SparkPlanNode;
 import com.capstone.parser.PlanVisitor;
+import static com.capstone.constants.Constants.*;
 import org.springframework.stereotype.Component;
 
 @Component
@@ -22,42 +23,38 @@ public class SelectConverter extends PlanVisitor {
         if (node == null) return;
 
         switch (node.getNodeType()) {
-            case "SELECT":
+            case SELECT:
                 selectExpr = node.getExpression();
                 break;
-            case "FROM":
+            case FROM:
                 fromExpr = node.getExpression();
                 break;
-            case "JOIN":
+            case JOIN:
                 joinExpr = node.getExpression();
                 break;
-            case "WHERE":
+            case WHERE:
                 whereExpr = node.getExpression();
                 break;
-            case "GROUP BY":
+            case GROUP_BY:
                 groupExpr = node.getExpression();
                 break;
-            case "HAVING":
+            case HAVING:
                 havingExpr = node.getExpression();
                 break;
-            case "ORDER BY":
+            case ORDER_BY:
                 orderExpr = node.getExpression();
                 break;
-            case "LIMIT":
+            case LIMIT:
                 limitExpr = node.getExpression();
                 break;
-        }
-        // Recursively visit children
-        for (SparkPlanNode child : node.getChildren()) {
-            visit(child);
         }
     }
 
     public String getQuery() {
         queryBuilder.setLength(0);
 
-        if (!selectExpr.isEmpty()) queryBuilder.append("SELECT ").append(selectExpr);
-        if (!fromExpr.isEmpty()) queryBuilder.append(" FROM ").append(fromExpr);
+        if (!selectExpr.isEmpty()) queryBuilder.append(SELECT+SPACE).append(selectExpr);
+        if (!fromExpr.isEmpty()) queryBuilder.append(SPACE+FROM+SPACE).append(fromExpr);
         if (!joinExpr.isEmpty()) {
             String table1 = "", table2 = "", joinType = "", onCond = "";
 
@@ -78,24 +75,24 @@ public class SelectConverter extends PlanVisitor {
                 System.err.println("JOIN parsing error: " + e.getMessage());
             }
 
-            queryBuilder.append(" FROM ")
+            queryBuilder.append(SPACE+FROM+SPACE)
                     .append(table1)
-                    .append(" ")
+                    .append(SPACE)
                     .append(joinType)
-                    .append(" JOIN ")
+                    .append(SPACE+JOIN+SPACE)
                     .append(table2)
-                    .append(" ON ")
+                    .append(SPACE+ON+SPACE)
                     .append(onCond);
         }
 
 
-        if (!whereExpr.isEmpty()) queryBuilder.append(" WHERE ").append(whereExpr);
-        if (!groupExpr.isEmpty()) queryBuilder.append(" GROUP BY ").append(groupExpr);
-        if (!havingExpr.isEmpty()) queryBuilder.append(" HAVING ").append(havingExpr);
-        if (!orderExpr.isEmpty()) queryBuilder.append(" ORDER BY ").append(orderExpr);
-        if (!limitExpr.isEmpty()) queryBuilder.append(" LIMIT ").append(limitExpr);
+        if (!whereExpr.isEmpty()) queryBuilder.append(SPACE+WHERE+SPACE).append(whereExpr);
+        if (!groupExpr.isEmpty()) queryBuilder.append(SPACE+GROUP_BY+SPACE).append(groupExpr);
+        if (!havingExpr.isEmpty()) queryBuilder.append(SPACE+HAVING+SPACE).append(havingExpr);
+        if (!orderExpr.isEmpty()) queryBuilder.append(SPACE+ORDER_BY+SPACE).append(orderExpr);
+        if (!limitExpr.isEmpty()) queryBuilder.append(SPACE+LIMIT+SPACE).append(limitExpr);
 
-        return queryBuilder.toString().trim();
+        return queryBuilder.append(SEMI_COLON).toString().trim();
     }
 
 }

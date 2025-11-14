@@ -28,9 +28,6 @@ public class SparkPlanService {
         QueryResponse resp = new QueryResponse();
         List<String> warnings = new ArrayList<>();
         try {
-            //spark.sql("CREATE TABLE Employees (EmployeeID INT, Name VARCHAR(100), Age INT, Department VARCHAR(50), SALARY DOUBLE)");
-            //spark.sql("INSERT INTO Employees (EmployeeID, Name, Age, Department, SALARY) VALUES (1, 'John Doe', 32, 'Sales', 52000), (2, 'Jane Smith', 28, 'Marketing', 45000), (3, 'Peter Jones', 46, 'HR', 60000)");
-
             spark.sql(
                     "CREATE OR REPLACE TEMP VIEW Employees AS " +
                             "SELECT 1 AS EmployeeID, 'John Doe' AS Name, 32 AS Age " +
@@ -46,7 +43,6 @@ public class SparkPlanService {
                             "UNION ALL SELECT 3 AS EmployeeID,  'HR' AS Dept, 60000.0 AS Salary " +
                             "UNION ALL SELECT 4 AS EmployeeID, 'Engineering' AS Dept, 75000.0 AS Salary "
             );
-
 
             spark.sql(sparkSql);
 
@@ -77,7 +73,7 @@ public class SparkPlanService {
 
             // 4. Return transformed query
             String bigQuerySql = converter.getQuery();
-            System.out.println("=====bigquery: " + bigQuerySql);
+            System.out.println("BigQuery ================= " + bigQuerySql);
 
             resp.setBigQuerySql(bigQuerySql);
         }

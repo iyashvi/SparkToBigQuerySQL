@@ -10,6 +10,9 @@ public class SparkPlanParser {
     public SparkPlanNode parse(String planString) {
         String[] lines = planString.split("\n");
         List<SparkPlanNode> nodes = new ArrayList<>();
+        boolean fromAdded = false;   // prevent duplicate FROM
+        SparkPlanNode lastJoin = null; // track most recent JOIN
+
 
         for (String line : lines) {
             line = line.trim();
@@ -18,14 +21,38 @@ public class SparkPlanParser {
             SparkPlanNode node = null;
 
             // SELECT
-            if (line.contains("Project")) {
+            if ((line.startsWith("Project") || line.startsWith("'Project")) &&
+                    !line.startsWith("+-") && !line.startsWith(":-") &&
+                    nodes.stream().noneMatch(n -> n.getNodeType().equals("SELECT"))) {
                 String expr = extractValue(line).replace("'", "").trim();
                 node = new SparkPlanNode("SELECT", expr);
             }
 
+
             // FROM
-            else if (line.startsWith("+- 'UnresolvedRelation")) {
-                node = new SparkPlanNode("FROM", extractValue(line));
+            else if (line.contains("'UnresolvedRelation")) {
+                String tableName = extractValue(line).trim();
+
+                if (lastJoin != null) {
+                    // Fill in TABLE1 or TABLE2 placeholders
+                    String expr = lastJoin.getExpression();
+                    if (expr.contains("TABLE1=?")) {
+                        expr = expr.replace("TABLE1=?", "TABLE1=" + tableName);
+                    } else if (expr.contains("TABLE2=?")) {
+                        expr = expr.replace("TABLE2=?", "TABLE2=" + tableName);
+                    }
+                    lastJoin.setExpression(expr);
+                } else if (!fromAdded) {
+                    node = new SparkPlanNode("FROM", tableName);
+                    fromAdded = true;
+                }
+            }
+
+            //JOIN
+            else if (line.contains("Join")) {
+                // Create JOIN node with placeholders for table names
+                node = new SparkPlanNode("JOIN", "TABLE1=?, TABLE2=? " + extractJoinDetails(line));
+                lastJoin = node;
             }
 
             // WHERE
@@ -46,6 +73,12 @@ public class SparkPlanParser {
                 continue;
             }
 
+            else if (line.startsWith("'UnresolvedHaving")) {
+                String havingCondition = extractHavingCondition(line);
+                node = new SparkPlanNode("HAVING", havingCondition);
+            }
+
+
             // ORDER BY
             else if (line.contains("Sort"))  {
                 node = new SparkPlanNode("ORDER BY", extractValue(line));
@@ -63,20 +96,20 @@ public class SparkPlanParser {
             }
         }
 
-        // Correct SQL order (SELECT → FROM → WHERE → ORDER → LIMIT)
+        // Correct SQL order (SELECT → FROM → JOIN ->  WHERE → ORDER → LIMIT)
         SparkPlanNode root = null;
         SparkPlanNode last = null;
 
         // Find SELECT node first
-        for (SparkPlanNode n : nodes) {
-            if (n.getNodeType().equals("SELECT")) {
-                root = n;
-                last = n;
-                break;
-            }
-        }
+//        for (SparkPlanNode n : nodes) {
+//            if (n.getNodeType().equals("SELECT")) {
+//                root = n;
+//                last = n;
+//                break;
+//            }
+//        }
 
-        for (String type : List.of( "FROM", "WHERE" , "GROUP BY", "ORDER BY", "LIMIT")) {
+        for (String type : List.of( "SELECT", "FROM", "JOIN",  "WHERE" , "GROUP BY", "HAVING", "ORDER BY", "LIMIT")) {
             for (SparkPlanNode n : nodes) {
                 if (n.getNodeType().equals(type)) {
                     if (root == null) {
@@ -89,7 +122,6 @@ public class SparkPlanParser {
                 }
             }
         }
-
         return root;
     }
 
@@ -140,16 +172,59 @@ public class SparkPlanParser {
                     .replace("#", "")
                     .trim();
 
+            String[] funcs = aggPart.split(",");
+            List<String> cleaned = new ArrayList<>();
+            for (String f : funcs) {
+                f = f.trim();
+                if (f.isEmpty()) continue;
 
-            aggPart = aggPart.replaceAll("\\s*,\\s*", ", ");
-            aggPart = aggPart.replaceAll(",\\s*$", "");
-            aggPart = aggPart.replaceAll("\\s+", " ");
+                // Keep only aggregate functions (skip plain column names)
+                if (!f.contains("(")) continue;
 
-            return aggPart;
+                // Format function properly
+                String fn = f.substring(0, f.indexOf('(')).toUpperCase();
+                String arg = f.substring(f.indexOf('(') + 1).trim();
+                cleaned.add(fn + "(" + arg + ")");
+            }
+
+            return String.join(", ", cleaned);
         }
-
-        return "unknown_aggregate";
+        return "";
     }
 
 
+    private String extractJoinDetails(String line) {
+        String joinType = "INNER";
+        String condition = "";
+
+        if (line.toLowerCase().contains("left")) joinType = "LEFT OUTER";
+        else if (line.toLowerCase().contains("right")) joinType = "RIGHT OUTER";
+        else if (line.toLowerCase().contains("full")) joinType = "FULL OUTER";
+        else if (line.toLowerCase().contains("cross")) joinType = "CROSS";
+
+        if (line.contains("(") && line.contains(")")) {
+            int s = line.indexOf('(');
+            int e = line.lastIndexOf(')');
+            if (s >= 0 && e > s) {
+                condition = line.substring(s + 1, e)
+                        .replaceAll("#\\d+", "")
+                        .replaceAll("'", "")
+                        .replaceAll("\\s+", " ")
+                        .trim();
+            }
+        }
+        return joinType + " ON " + condition;
+    }
+
+    private String extractHavingCondition(String line) {
+        int start = line.indexOf('(');
+        int end = line.lastIndexOf(')');
+        if (start != -1 && end != -1 && end > start) {
+            return line.substring(start + 1, end)
+                    .replace("'", "")
+                    .replace("#", "")
+                    .trim();
+        }
+        return "";
+    }
 }

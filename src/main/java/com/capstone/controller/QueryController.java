@@ -50,7 +50,6 @@ public class QueryController {
             List<FileQueryResponse> response = sqlFileService.extractQueriesFromFile(tempFile.getAbsolutePath());
             return ResponseEntity.ok(response);
         } catch (Exception e) {
-            e.printStackTrace();
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
         }
     }

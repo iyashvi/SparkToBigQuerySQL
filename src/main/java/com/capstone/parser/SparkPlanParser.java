@@ -4,6 +4,7 @@ import static com.capstone.constants.Constants.*;
 import org.springframework.stereotype.Component;
 
 import java.util.*;
+import java.util.regex.Pattern;
 
 @Component
 public class SparkPlanParser {
@@ -13,6 +14,8 @@ public class SparkPlanParser {
         List<SparkPlanNode> nodes = new ArrayList<>();
         boolean fromAdded = false;   // prevent duplicate FROM
         SparkPlanNode lastJoin = null; // track most recent JOIN
+        String pendingAlias = null;
+
 
         for (String line : lines) {
             line = line.trim();
@@ -21,34 +24,43 @@ public class SparkPlanParser {
             SparkPlanNode node = null;
 
             // SELECT
-            if (line.contains("Project") && nodes.stream().noneMatch(n -> n.getNodeType().equals(SELECT))) {
-                node = new SparkPlanNode(SELECT, extractValue(line));
+            if ((line.contains("Project")) &&
+                    nodes.stream().noneMatch(n -> n.getNodeType().equals("SELECT"))) {
+                //String expr = extractValue(line).replace("'", "").trim();
+                node = new SparkPlanNode("SELECT", extractValue(line));
             }
 
             // FROM
-            else if (line.contains("UnresolvedRelation")) {
-                String tableName = extractValue(line).trim();
+            else if (line.startsWith(":- 'SubqueryAlias") || line.startsWith("+- 'SubqueryAlias")) {
+                pendingAlias = line.split(" ")[2].trim(); // store alias e.g., e or d
+            }
+            else if (line.contains("'UnresolvedRelation")) {
+                String table = extractValue(line).trim();
 
                 if (lastJoin != null) {
-                    // Fill in TABLE1 or TABLE2 placeholders
-                    String expr = lastJoin.getExpression();
-                    if (expr.contains("TABLE1=?") && line.contains(":-")) {
-                        expr = expr.replace("TABLE1=?", "TABLE1=" + tableName);
-                    } else if (expr.contains("TABLE2=?") && line.contains("+-")) {
-                        expr = expr.replace("TABLE2=?", "TABLE2=" + tableName);
+                    // This table belongs to the JOIN
+                    if (!lastJoin.hasTable1()) lastJoin.setTable1(table, pendingAlias);
+                    else lastJoin.setTable2(table, pendingAlias);
+                } else {
+                    // No join: normal FROM
+                    if (!fromAdded) {
+                        nodes.add(new SparkPlanNode("FROM", table + (pendingAlias != null ? " AS " + pendingAlias : "")));
+                        fromAdded = true;
                     }
-                    lastJoin.setExpression(expr);
-                } else if (!fromAdded) {
-                    node = new SparkPlanNode(FROM, tableName);
-                    fromAdded = true;
                 }
-            }
 
-            //JOIN
+                pendingAlias = null;
+            }
             else if (line.contains("Join")) {
-                // Create JOIN node with placeholders for table names
-                node = new SparkPlanNode(JOIN, "TABLE1=?, TABLE2=? " + extractJoinDetails(line));
-                lastJoin = node;
+                String joinType = extractJoinType(line);
+                String condition = extractJoinCondition(line);
+
+                SparkPlanNode joinNode = new SparkPlanNode("JOIN", "");
+                joinNode.setJoinType(joinType);
+                joinNode.setJoinCondition(condition);
+
+                lastJoin = joinNode;
+                nodes.add(joinNode);
             }
 
             // WHERE
@@ -66,7 +78,8 @@ public class SparkPlanParser {
 
                 nodes.add(selectNode);
                 nodes.add(groupNode);
-                continue;
+
+
             }
 
             // HAVING
@@ -194,6 +207,6 @@ public class SparkPlanParser {
                 condition = replacement(line, start, end);
             }
         }
-        return joinType + " ON " + condition;
+        return "";
     }
 }

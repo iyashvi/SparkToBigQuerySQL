@@ -5,9 +5,6 @@ import com.capstone.parser.PlanVisitor;
 import static com.capstone.constants.Constants.*;
 import org.springframework.stereotype.Component;
 
-import java.util.*;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 @Component
 public class SelectConverter extends PlanVisitor {
@@ -21,6 +18,12 @@ public class SelectConverter extends PlanVisitor {
     private String havingExpr = "";
     private String orderExpr = "";
     private String limitExpr = "";
+    private String joinTable1 = "";
+    private String joinType = "";
+    private String joinTable2 = "";
+    private String joinAlias1 = "";
+    private String joinAlias2 = "";
+    private String joinOn = "";
 
     @Override
     public void visit(SparkPlanNode node) {
@@ -36,8 +39,14 @@ public class SelectConverter extends PlanVisitor {
             case FROM:
                 fromExpr = node.getExpression();
                 break;
-            case JOIN:
-                joinExpr = node.getExpression();
+            case "JOIN":
+                // --- JOIN EXTRACTION FIX HERE ---
+                joinTable1 = node.getTable1();
+                joinAlias1 = node.getAlias1();
+                joinTable2 = node.getTable2();
+                joinAlias2 = node.getAlias2();
+                joinType   = node.getJoinType();
+                joinOn     = node.getJoinCondition();
                 break;
             case WHERE:
                 whereExpr = node.getExpression();
@@ -106,43 +115,29 @@ public class SelectConverter extends PlanVisitor {
     public String getQuery() {
         queryBuilder.setLength(0);
 
-        // ---- SELECT
-        if (!selectExpr.isEmpty()) {
-            queryBuilder.append(SELECT + SPACE)
-                    .append(transformSelectExpr(selectExpr));
+        if (!selectExpr.isEmpty()) queryBuilder.append("SELECT ").append(selectExpr);
+        else if (!fromExpr.isEmpty()) queryBuilder.append("SELECT *");
+        if (!joinTable1.isEmpty()) {
+            queryBuilder.append(" FROM ")
+                    .append(joinTable1).append(" ").append(joinAlias1);
+        }
+        else if (!fromExpr.isEmpty()) {
+            queryBuilder.append(" FROM ").append(fromExpr);
         }
 
-        // ---- FROM / JOIN
-        if (!joinExpr.isEmpty()) {
-            queryBuilder.append(SPACE).append(parseJoinExpr(joinExpr));
-        } else if (!fromExpr.isEmpty()) {
-            queryBuilder.append(SPACE + FROM + SPACE).append(fromExpr);
+
+        if (!joinTable1.isEmpty() && !joinTable2.isEmpty()) {
+            queryBuilder.append(" ")
+                    .append(joinType).append(" ")
+                    .append(joinTable2).append(" ").append(joinAlias2)
+                    .append(" ON ").append(joinOn);
         }
 
-        // ---- WHERE
-        if (!whereExpr.isEmpty()) {
-            queryBuilder.append(SPACE + WHERE + SPACE).append(whereExpr);
-        }
-
-        // ---- GROUP BY
-        if (!groupExpr.isEmpty()) {
-            queryBuilder.append(SPACE + GROUP_BY + SPACE).append(groupExpr);
-        }
-
-        // ---- HAVING
-        if (!havingExpr.isEmpty()) {
-            queryBuilder.append(SPACE + HAVING + SPACE).append(havingExpr);
-        }
-
-        // ---- ORDER BY
-        if (!orderExpr.isEmpty()) {
-            queryBuilder.append(SPACE + ORDER_BY + SPACE).append(orderExpr);
-        }
-
-        // ---- LIMIT
-        if (!limitExpr.isEmpty()) {
-            queryBuilder.append(SPACE + LIMIT + SPACE).append(limitExpr);
-        }
+        if (!whereExpr.isEmpty()) queryBuilder.append(" WHERE ").append(whereExpr);
+        if (!groupExpr.isEmpty()) queryBuilder.append(" GROUP BY ").append(groupExpr);
+        if (!havingExpr.isEmpty()) queryBuilder.append(" HAVING ").append(havingExpr);
+        if (!orderExpr.isEmpty()) queryBuilder.append(" ORDER BY ").append(orderExpr);
+        if (!limitExpr.isEmpty()) queryBuilder.append(" LIMIT ").append(limitExpr);
 
         return queryBuilder.append(SEMI_COLON).toString().trim();
     }

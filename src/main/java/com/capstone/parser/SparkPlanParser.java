@@ -4,6 +4,7 @@ import static com.capstone.constants.Constants.*;
 import org.springframework.stereotype.Component;
 
 import java.util.*;
+import java.util.regex.Pattern;
 
 @Component
 public class SparkPlanParser {
@@ -13,6 +14,8 @@ public class SparkPlanParser {
         List<SparkPlanNode> nodes = new ArrayList<>();
         boolean fromAdded = false;   // prevent duplicate FROM
         SparkPlanNode lastJoin = null; // track most recent JOIN
+        String pendingAlias = null;
+
 
         for (String line : lines) {
             line = line.trim();
@@ -21,35 +24,44 @@ public class SparkPlanParser {
             SparkPlanNode node = null;
 
             // SELECT
-            if (line.contains("Project") && nodes.stream().noneMatch(n -> n.getNodeType().equals(SELECT))) {
-                node = new SparkPlanNode(SELECT, extractValue(line));
+            if ((line.contains("Project")) &&
+                    nodes.stream().noneMatch(n -> n.getNodeType().equals("SELECT"))) {
+                //String expr = extractValue(line).replace("'", "").trim();
+                node = new SparkPlanNode("SELECT", extractValue(line));
             }
 
 
             // FROM
-            else if (line.contains("UnresolvedRelation")) {
-                String tableName = extractValue(line).trim();
+            else if (line.startsWith(":- 'SubqueryAlias") || line.startsWith("+- 'SubqueryAlias")) {
+                pendingAlias = line.split(" ")[2].trim(); // store alias e.g., e or d
+            }
+            else if (line.contains("'UnresolvedRelation")) {
+                String table = extractValue(line).trim();
 
                 if (lastJoin != null) {
-                    // Fill in TABLE1 or TABLE2 placeholders
-                    String expr = lastJoin.getExpression();
-                    if (expr.contains("TABLE1=?") && line.contains(":-")) {
-                        expr = expr.replace("TABLE1=?", "TABLE1=" + tableName);
-                    } else if (expr.contains("TABLE2=?") && line.contains("+-")) {
-                        expr = expr.replace("TABLE2=?", "TABLE2=" + tableName);
+                    // This table belongs to the JOIN
+                    if (!lastJoin.hasTable1()) lastJoin.setTable1(table, pendingAlias);
+                    else lastJoin.setTable2(table, pendingAlias);
+                } else {
+                    // No join: normal FROM
+                    if (!fromAdded) {
+                        nodes.add(new SparkPlanNode("FROM", table + (pendingAlias != null ? " AS " + pendingAlias : "")));
+                        fromAdded = true;
                     }
-                    lastJoin.setExpression(expr);
-                } else if (!fromAdded) {
-                    node = new SparkPlanNode(FROM, tableName);
-                    fromAdded = true;
                 }
-            }
 
-            //JOIN
+                pendingAlias = null;
+            }
             else if (line.contains("Join")) {
-                // Create JOIN node with placeholders for table names
-                node = new SparkPlanNode(JOIN, "TABLE1=?, TABLE2=? " + extractJoinDetails(line));
-                lastJoin = node;
+                String joinType = extractJoinType(line);
+                String condition = extractJoinCondition(line);
+
+                SparkPlanNode joinNode = new SparkPlanNode("JOIN", "");
+                joinNode.setJoinType(joinType);
+                joinNode.setJoinCondition(condition);
+
+                lastJoin = joinNode;
+                nodes.add(joinNode);
             }
 
             // WHERE
@@ -67,7 +79,8 @@ public class SparkPlanParser {
                 SparkPlanNode selectNode = new SparkPlanNode(SELECT, aggExpr);
                 nodes.add(selectNode);
                 nodes.add(groupNode);
-                continue;
+
+
             }
 
             else if (line.contains("UnresolvedHaving")) {
@@ -171,46 +184,51 @@ public class SparkPlanParser {
                 if (!f.contains(LEFT_ROUND_BRACKET)) continue;
 
                 // Format function properly
-                System.out.println(f);
-                String fn = f.substring(0, f.indexOf(LEFT_ROUND_BRACKET)).toUpperCase();
-                String arg = "";
-                if(f.contains("windowspecdefinition")){
-                    arg = f.substring(f.indexOf(LEFT_ROUND_BRACKET) + 1, f.indexOf("windowspecdefinition")).trim();
+                String fn = f.substring(0, f.indexOf('(')).toUpperCase();
+                String arg = f.substring(f.indexOf('(') + 1).trim();
+                cleaned.add(fn + "(" + arg + ")");
+
+                // FIX: Extract alias if present in format "sum(salary) AS total_salary"
+                String alias = "";
+                if (arg.contains(" AS ")) {
+                    String[] parts = arg.split(" AS ");
+                    arg = parts[0].trim();
+                    alias = parts[1].trim();
                 }
-                else {
-                    arg = f.substring(f.indexOf(LEFT_ROUND_BRACKET) + 1).trim();
-                }
-                cleaned.add(fn + LEFT_ROUND_BRACKET + arg + RIGHT_ROUND_BRACKET);
+
+                String full = fn + "(" + arg + ")";
+                if (!alias.isEmpty()) full += " AS " + alias;
+
+                cleaned.add(full);
+
             }
 
             return String.join(COMMA+SPACE, cleaned);
         }
         return "";
     }
+    private String extractJoinType(String line) {
+        String lower = line.toLowerCase();
 
-
-    private String extractJoinDetails(String line) {
-        String joinType = "INNER";
-        String condition = "";
-
-        if (line.toLowerCase().contains("left")) joinType = "LEFT OUTER";
-        else if (line.toLowerCase().contains("right")) joinType = "RIGHT OUTER";
-        else if (line.toLowerCase().contains("full")) joinType = "FULL OUTER";
-        else if (line.toLowerCase().contains("cross")) joinType = "CROSS";
-
-        if (line.contains(LEFT_ROUND_BRACKET) && line.contains(RIGHT_ROUND_BRACKET)) {
-            int s = line.indexOf(LEFT_ROUND_BRACKET);
-            int e = line.lastIndexOf(RIGHT_ROUND_BRACKET);
-            if (s >= 0 && e > s) {
-                condition = line.substring(s + 1, e)
-                        .replaceAll("#\\d+", "")
-                        .replaceAll(SINGLE_INVERTED_COMMA, "")
-                        .replaceAll("\\s+", SPACE)
-                        .trim();
-            }
-        }
-        return joinType + " ON " + condition;
+        if (lower.contains("left")) return "LEFT JOIN";
+        if (lower.contains("right")) return "RIGHT JOIN";
+        if (lower.contains("full")) return "FULL JOIN";
+        if (lower.contains("cross")) return "CROSS JOIN";
+        return "INNER JOIN";
     }
+
+    private String extractJoinCondition(String line) {
+        int s = line.indexOf('(');
+        int e = line.lastIndexOf(')');
+        if (s != -1 && e != -1) {
+            return line.substring(s + 1, e)
+                    .replaceAll("#\\d+", "")
+                    .replace("'", "")
+                    .trim();
+        }
+        return "";
+    }
+
 
     private String extractHavingCondition(String line) {
         int start = line.indexOf(LEFT_ROUND_BRACKET);

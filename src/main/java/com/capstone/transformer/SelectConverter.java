@@ -67,24 +67,57 @@ public class SelectConverter extends PlanVisitor {
     public String getQuery() {
         queryBuilder.setLength(0);
 
-        if (!selectExpr.isEmpty()) queryBuilder.append("SELECT ").append(selectExpr);
-        else if (!fromExpr.isEmpty()) queryBuilder.append("SELECT *");
-        if (!joinTable1.isEmpty()) {
-            queryBuilder.append(" FROM ")
-                    .append(joinTable1).append(" ").append(joinAlias1);
-        }
-        else if (!fromExpr.isEmpty()) {
-            queryBuilder.append(" FROM ").append(fromExpr);
-        }
 
-
+        if (!selectExpr.isEmpty()) {
+            queryBuilder.append("SELECT ").append(selectExpr.replaceAll("#\\d+", ""));
+        } else {
+            queryBuilder.append("SELECT *");
+        }
+// FROM + JOIN
         if (!joinTable1.isEmpty() && !joinTable2.isEmpty()) {
-            queryBuilder.append(" ")
-                    .append(joinType).append(" ")
-                    .append(joinTable2).append(" ").append(joinAlias2)
-                    .append(" ON ").append(joinOn);
+            // Use JOIN tables
+            queryBuilder.append(" FROM ").append(joinTable1);
+            if (joinAlias1 != null && !joinAlias1.isEmpty() && !joinAlias1.equalsIgnoreCase("null")) {
+                queryBuilder.append(" AS ").append(joinAlias1);
+            }
+            queryBuilder.append(" ").append(joinType).append(" ").append(joinTable2);
+            if (joinAlias2 != null && !joinAlias2.isEmpty() && !joinAlias2.equalsIgnoreCase("null")) {
+                queryBuilder.append(" AS ").append(joinAlias2);
+            }
+            if (joinOn != null && !joinOn.isEmpty()) {
+                joinOn = joinOn.replaceAll("#\\d+", "");
+                queryBuilder.append(" ON ").append(joinOn);
+            }
+        } else if (!fromExpr.isEmpty()) {
+            // Only FROM table, no JOIN
+            queryBuilder.append(" FROM ").append(fromExpr.replaceAll("#\\d+", ""));
         }
 
+//        if (!selectExpr.isEmpty()) queryBuilder.append("SELECT ").append(selectExpr);
+//        else if (!fromExpr.isEmpty()) queryBuilder.append("SELECT * ");
+//        if (!joinTable1.isEmpty()) {
+//            queryBuilder.append(" FROM ")
+//                    .append(joinTable1).append(" ").append(joinAlias1);
+//        }
+//        else if (!fromExpr.isEmpty()) {
+//            queryBuilder.append(" FROM ").append(fromExpr);
+//        }
+//        if (!joinTable1.isEmpty() && !joinTable2.isEmpty()) {
+//            queryBuilder.append(" FROM ")
+//                    .append(joinTable1);
+//            if (joinAlias1 != null && !joinAlias1.isEmpty() && !joinAlias1.equalsIgnoreCase("null")) {
+//                queryBuilder.append(" AS ").append(joinAlias1);
+//            }
+//            queryBuilder.append(" ").append(joinType).append(" ")
+//                    .append(joinTable2);
+//            if (joinAlias2 != null && !joinAlias2.isEmpty() && !joinAlias2.equalsIgnoreCase("null")) {
+//                queryBuilder.append(" AS ").append(joinAlias2);
+//            }
+//            if (joinOn != null && !joinOn.isEmpty()) {
+//                joinOn = joinOn.replaceAll("#\\d+", ""); // clean Spark #numbers
+//                queryBuilder.append(" ON ").append(joinOn);
+//            }
+//        }
         if (!whereExpr.isEmpty()) queryBuilder.append(" WHERE ").append(whereExpr);
         if (!groupExpr.isEmpty()) queryBuilder.append(" GROUP BY ").append(groupExpr);
         if (!havingExpr.isEmpty()) queryBuilder.append(" HAVING ").append(havingExpr);

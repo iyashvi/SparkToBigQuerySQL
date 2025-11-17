@@ -2,9 +2,8 @@ package com.capstone.parser;
 import com.capstone.model.SparkPlanNode;
 import static com.capstone.constants.Constants.*;
 import org.springframework.stereotype.Component;
-
 import java.util.*;
-import java.util.regex.Pattern;
+
 
 @Component
 public class SparkPlanParser {
@@ -26,14 +25,15 @@ public class SparkPlanParser {
             // SELECT
             if ((line.contains("Project")) &&
                     nodes.stream().noneMatch(n -> n.getNodeType().equals("SELECT"))) {
-                //String expr = extractValue(line).replace("'", "").trim();
-                node = new SparkPlanNode("SELECT", extractValue(line));
+                String expr = extractValue(line).replace("'", "").trim();
+                expr = cleanAlias(expr);
+                node = new SparkPlanNode("SELECT", expr);
             }
 
 
             // FROM
             else if (line.startsWith(":- 'SubqueryAlias") || line.startsWith("+- 'SubqueryAlias")) {
-                pendingAlias = line.split(" ")[2].trim(); // store alias e.g., e or d
+                pendingAlias = line.split(" ")[2].trim();
             }
             else if (line.contains("'UnresolvedRelation")) {
                 String table = extractValue(line).trim();
@@ -69,7 +69,7 @@ public class SparkPlanParser {
                 node = new SparkPlanNode(WHERE, extractFilterCondition(line));
             }
 
-            // GROUP BY (Aggregate node)
+//            // GROUP BY (Aggregate node)
             else if (line.contains("Aggregate")) {
                 String groupExpr = extractGroupByColumns(line);
                 String aggExpr = extractAggregateFunctions(line);
@@ -80,14 +80,13 @@ public class SparkPlanParser {
                 nodes.add(selectNode);
                 nodes.add(groupNode);
 
+                continue;
 
             }
-
             else if (line.contains("UnresolvedHaving")) {
                 String havingCondition = extractHavingCondition(line);
                 node = new SparkPlanNode(HAVING, havingCondition);
             }
-
 
             // ORDER BY
             else if (line.contains("Sort"))  {
@@ -135,6 +134,14 @@ public class SparkPlanParser {
         return parts.length > 1 ? parts[1].trim() : "";
     }
 
+    private String cleanAlias(String expr){
+        return expr.replaceAll("#\\d+","").trim();
+    }
+
+    private String cleanExpression(String expr){
+        return expr.replaceAll("#\\d+","").trim();
+    }
+
     private String extractFilterCondition(String line) {
         int start = line.indexOf(LEFT_ROUND_BRACKET);
         int end = line.lastIndexOf(RIGHT_ROUND_BRACKET);
@@ -159,6 +166,8 @@ public class SparkPlanParser {
         return "unknown_group_columns";
     }
 
+
+
     private String extractAggregateFunctions(String line) {
         int firstEnd = line.indexOf(RIGHT_SQUARE_BRACKET);
         int secondStart = line.indexOf(LEFT_SQUARE_BRACKET, firstEnd + 1);
@@ -180,15 +189,15 @@ public class SparkPlanParser {
                 f = f.trim();
                 if (f.isEmpty()) continue;
 
-                // Keep only aggregate functions (skip plain column names)
+
                 if (!f.contains(LEFT_ROUND_BRACKET)) continue;
 
                 // Format function properly
-                String fn = f.substring(0, f.indexOf('(')).toUpperCase();
-                String arg = f.substring(f.indexOf('(') + 1).trim();
-                cleaned.add(fn + "(" + arg + ")");
+                String fn = f.substring(0, f.indexOf(LEFT_ROUND_BRACKET)).toUpperCase();
+                String arg = f.substring(f.indexOf(LEFT_ROUND_BRACKET) + 1).trim();
+                cleaned.add(fn + LEFT_ROUND_BRACKET + arg + RIGHT_ROUND_BRACKET);
 
-                // FIX: Extract alias if present in format "sum(salary) AS total_salary"
+
                 String alias = "";
                 if (arg.contains(" AS ")) {
                     String[] parts = arg.split(" AS ");
@@ -196,8 +205,8 @@ public class SparkPlanParser {
                     alias = parts[1].trim();
                 }
 
-                String full = fn + "(" + arg + ")";
-                if (!alias.isEmpty()) full += " AS " + alias;
+                String full = fn + LEFT_ROUND_BRACKET + arg + RIGHT_ROUND_BRACKET;
+                if (!alias.isEmpty()) full += " AS " + cleanAlias(alias);
 
                 cleaned.add(full);
 
@@ -218,12 +227,12 @@ public class SparkPlanParser {
     }
 
     private String extractJoinCondition(String line) {
-        int s = line.indexOf('(');
-        int e = line.lastIndexOf(')');
+        int s = line.indexOf(LEFT_ROUND_BRACKET);
+        int e = line.lastIndexOf(RIGHT_ROUND_BRACKET);
         if (s != -1 && e != -1) {
             return line.substring(s + 1, e)
                     .replaceAll("#\\d+", "")
-                    .replace("'", "")
+                    .replace(SINGLE_INVERTED_COMMA, "")
                     .trim();
         }
         return "";
@@ -241,4 +250,22 @@ public class SparkPlanParser {
         }
         return "";
     }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 }

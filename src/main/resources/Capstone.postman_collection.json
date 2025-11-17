@@ -60,6 +60,35 @@
 				"description": "This is a POST request, submitting data to an API via the request body. This request submits JSON data, and the data is reflected in the response.\n\nA successful POST request typically returns a `200 OK` or `201 Created` response code."
 			},
 			"response": []
+		},
+		{
+			"name": "Sql File",
+			"request": {
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "formdata",
+					"formdata": [
+						{
+							"key": "file",
+							"type": "file",
+							"src": "/C:/Users/HP/Documents/WORK/SparkQueries.sql"
+						}
+					]
+				},
+				"url": {
+					"raw": "{{hostname}}/v1/convert/sqlFile",
+					"host": [
+						"{{hostname}}"
+					],
+					"path": [
+						"v1",
+						"convert",
+						"sqlFile"
+					]
+				}
+			},
+			"response": []
 		}
 	]
 }

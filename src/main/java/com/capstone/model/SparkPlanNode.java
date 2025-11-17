@@ -41,7 +41,6 @@ public class SparkPlanNode {
         this.alias2 = alias;
     }
 
-
     public String getJoinSQL() {
         return table1 + " AS " + alias1 + " " +
                 joinType + " JOIN " +

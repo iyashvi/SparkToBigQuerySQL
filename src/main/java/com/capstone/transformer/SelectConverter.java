@@ -73,18 +73,21 @@ public class SelectConverter extends PlanVisitor {
         if (!selectExpr.isEmpty()) queryBuilder.append("SELECT ").append(selectExpr);
         else if (!fromExpr.isEmpty()) queryBuilder.append("SELECT *");
         if (!joinTable1.isEmpty()) {
-            queryBuilder.append(" FROM ").append(joinTable1);
-            if (!joinAlias1.isEmpty()) queryBuilder.append(" AS ").append(joinAlias1);
-        } else if (!fromExpr.isEmpty()) {
+            queryBuilder.append(" FROM ")
+                    .append(joinTable1).append(" ").append(joinAlias1);
+        }
+        else if (!fromExpr.isEmpty()) {
             queryBuilder.append(" FROM ").append(fromExpr);
         }
 
+
         if (!joinTable1.isEmpty() && !joinTable2.isEmpty()) {
-            queryBuilder.append(" ").append(joinType)
-                    .append(" ").append(joinTable2);
-            if (!joinAlias2.isEmpty()) queryBuilder.append(" AS ").append(joinAlias2);
-            if (!joinOn.isEmpty()) queryBuilder.append(" ON ").append(joinOn);
+            queryBuilder.append(" ")
+                    .append(joinType).append(" ")
+                    .append(joinTable2).append(" ").append(joinAlias2)
+                    .append(" ON ").append(joinOn);
         }
+
         if (!whereExpr.isEmpty()) queryBuilder.append(" WHERE ").append(whereExpr);
         if (!groupExpr.isEmpty()) queryBuilder.append(" GROUP BY ").append(groupExpr);
         if (!havingExpr.isEmpty()) queryBuilder.append(" HAVING ").append(havingExpr);

@@ -187,6 +187,20 @@ public class SparkPlanParser {
                 String fn = f.substring(0, f.indexOf('(')).toUpperCase();
                 String arg = f.substring(f.indexOf('(') + 1).trim();
                 cleaned.add(fn + "(" + arg + ")");
+
+                // FIX: Extract alias if present in format "sum(salary) AS total_salary"
+                String alias = "";
+                if (arg.contains(" AS ")) {
+                    String[] parts = arg.split(" AS ");
+                    arg = parts[0].trim();
+                    alias = parts[1].trim();
+                }
+
+                String full = fn + "(" + arg + ")";
+                if (!alias.isEmpty()) full += " AS " + alias;
+
+                cleaned.add(full);
+
             }
 
             return String.join(", ", cleaned);

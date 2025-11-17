@@ -2,6 +2,7 @@ package com.capstone.transformer;
 
 import com.capstone.model.SparkPlanNode;
 import com.capstone.parser.PlanVisitor;
+import static com.capstone.constants.Constants.*;
 import org.springframework.stereotype.Component;
 
 
@@ -30,10 +31,10 @@ public class SelectConverter extends PlanVisitor {
         if (node == null) return;
 
         switch (node.getNodeType()) {
-            case "SELECT":
+            case SELECT:
                 selectExpr = node.getExpression();
                 break;
-            case "FROM":
+            case FROM:
                 fromExpr = node.getExpression();
                 break;
             case "JOIN":
@@ -45,25 +46,21 @@ public class SelectConverter extends PlanVisitor {
                 joinType   = node.getJoinType();
                 joinOn     = node.getJoinCondition();
                 break;
-            case "WHERE":
+            case WHERE:
                 whereExpr = node.getExpression();
                 break;
-            case "GROUP BY":
+            case GROUP_BY:
                 groupExpr = node.getExpression();
                 break;
-            case "HAVING":
+            case HAVING:
                 havingExpr = node.getExpression();
                 break;
-            case "ORDER BY":
+            case ORDER_BY:
                 orderExpr = node.getExpression();
                 break;
-            case "LIMIT":
+            case LIMIT:
                 limitExpr = node.getExpression();
                 break;
-        }
-        // Recursively visit children
-        for (SparkPlanNode child : node.getChildren()) {
-            visit(child);
         }
     }
 
@@ -94,7 +91,7 @@ public class SelectConverter extends PlanVisitor {
         if (!orderExpr.isEmpty()) queryBuilder.append(" ORDER BY ").append(orderExpr);
         if (!limitExpr.isEmpty()) queryBuilder.append(" LIMIT ").append(limitExpr);
 
-        return queryBuilder.toString().trim();
+        return queryBuilder.append(SEMI_COLON).toString().trim();
     }
 
 }

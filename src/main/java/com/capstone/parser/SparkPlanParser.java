@@ -1,5 +1,6 @@
 package com.capstone.parser;
 import com.capstone.model.SparkPlanNode;
+import static com.capstone.constants.Constants.*;
 import org.springframework.stereotype.Component;
 
 import java.util.*;
@@ -9,12 +10,11 @@ import java.util.regex.Pattern;
 public class SparkPlanParser {
 
     public SparkPlanNode parse(String planString) {
-        String[] lines = planString.split("\n");
+        String[] lines = planString.split(NEW_LINE);
         List<SparkPlanNode> nodes = new ArrayList<>();
         boolean fromAdded = false;   // prevent duplicate FROM
         SparkPlanNode lastJoin = null; // track most recent JOIN
         String pendingAlias = null;
-
 
 
         for (String line : lines) {
@@ -65,44 +65,42 @@ public class SparkPlanParser {
             }
 
             // WHERE
-            else if (line.startsWith("+- 'Filter")) {
-                node = new SparkPlanNode("WHERE", extractFilterCondition(line));
+            else if (line.contains("Filter")) {
+                node = new SparkPlanNode(WHERE, extractFilterCondition(line));
             }
 
-
-            else if (line.startsWith("'Aggregate") || line.startsWith("Aggregate")) {
+            // GROUP BY (Aggregate node)
+            else if (line.contains("Aggregate")) {
                 String groupExpr = extractGroupByColumns(line);
                 String aggExpr = extractAggregateFunctions(line);
 
-                SparkPlanNode groupNode = new SparkPlanNode("GROUP BY", groupExpr);
-                SparkPlanNode selectNode = new SparkPlanNode("SELECT", aggExpr);
-
+                // Two nodes: GROUP BY and SELECT (aggregations)
+                SparkPlanNode groupNode = new SparkPlanNode(GROUP_BY, groupExpr);
+                SparkPlanNode selectNode = new SparkPlanNode(SELECT, aggExpr);
                 nodes.add(selectNode);
                 nodes.add(groupNode);
 
 
             }
 
-            else if (line.startsWith("'UnresolvedHaving")) {
+            else if (line.contains("UnresolvedHaving")) {
                 String havingCondition = extractHavingCondition(line);
-                SparkPlanNode havingNode = new SparkPlanNode("HAVING", havingCondition);
-                nodes.add(havingNode);
-                continue;
+                node = new SparkPlanNode(HAVING, havingCondition);
             }
 
 
             // ORDER BY
             else if (line.contains("Sort"))  {
-                node = new SparkPlanNode("ORDER BY", extractValue(line));
+                node = new SparkPlanNode(ORDER_BY, extractValue(line));
             }
 
             // LIMIT
             else if (line.startsWith("'GlobalLimit") || line.startsWith("'LocalLimit")) {
-                node = new SparkPlanNode("LIMIT", extractValue(line));
+                node = new SparkPlanNode(LIMIT, extractValue(line));
             }
 
             if (node != null) {
-                System.out.println("=====node: " + node);
+                System.out.println("=====node: " + node);  // -- For Debugging
                 nodes.add(node);
             }
         }
@@ -111,7 +109,7 @@ public class SparkPlanParser {
         SparkPlanNode root = null;
         SparkPlanNode last = null;
 
-        for (String type : List.of( "SELECT", "FROM", "JOIN", "WHERE" , "GROUP BY", "HAVING", "ORDER BY", "LIMIT")) {
+        for (String type : List.of( SELECT, FROM, JOIN,  WHERE , GROUP_BY, HAVING, ORDER_BY, LIMIT)) {
             for (SparkPlanNode n : nodes) {
                 if (n.getNodeType().equals(type)) {
                     if (root == null) {
@@ -128,60 +126,62 @@ public class SparkPlanParser {
     }
 
     private String extractValue(String line) {
-        int start = line.indexOf('[');
-        int end = line.indexOf(']');
+        int start = line.indexOf(LEFT_SQUARE_BRACKET);
+        int end = line.indexOf(RIGHT_SQUARE_BRACKET);
         if (start != -1 && end != -1 && end > start) {
-            return line.substring(start + 1, end).replace("'", "").trim();
+            return line.substring(start + 1, end).replace(SINGLE_INVERTED_COMMA, "").trim();
         }
-        String[] parts = line.split(" ");
+        String[] parts = line.split(SPACE);
         return parts.length > 1 ? parts[1].trim() : "";
     }
 
     private String extractFilterCondition(String line) {
-        int start = line.indexOf('(');
-        int end = line.lastIndexOf(')');
+        int start = line.indexOf(LEFT_ROUND_BRACKET);
+        int end = line.lastIndexOf(RIGHT_ROUND_BRACKET);
         if (start != -1 && end != -1 && end > start) {
             return line.substring(start + 1, end)
-                    .replace("'", "")
-                    .replace("#", "")
+                    .replace(SINGLE_INVERTED_COMMA, "")
+                    .replace(HASHTAG, "")
                     .trim();
         }
         return "unknown_condition";
     }
 
     private String extractGroupByColumns(String line) {
-        int firstStart = line.indexOf('[');
-        int firstEnd = line.indexOf(']');
+        int firstStart = line.indexOf(LEFT_SQUARE_BRACKET);
+        int firstEnd = line.indexOf(RIGHT_SQUARE_BRACKET);
         if (firstStart != -1 && firstEnd != -1) {
             return line.substring(firstStart + 1, firstEnd)
-                    .replace("'", "")
-                    .replace("#", "")
+                    .replace(SINGLE_INVERTED_COMMA, "")
+                    .replace(HASHTAG, "")
                     .trim();
         }
         return "unknown_group_columns";
     }
+
     private String extractAggregateFunctions(String line) {
-        int firstEnd = line.indexOf(']');
-        int secondStart = line.indexOf('[', firstEnd + 1);
-        int secondEnd = line.indexOf(']', secondStart + 1);
+        int firstEnd = line.indexOf(RIGHT_SQUARE_BRACKET);
+        int secondStart = line.indexOf(LEFT_SQUARE_BRACKET, firstEnd + 1);
+        int secondEnd = line.indexOf(RIGHT_SQUARE_BRACKET, secondStart + 1);
 
         if (secondStart != -1 && secondEnd != -1) {
             String aggPart = line.substring(secondStart + 1, secondEnd)
                     .replace("unresolvedalias(", "")
+                    .replace("unspecifiedframe$(", "")
                     .replace("None", "")
-                    .replace("'", "")
-                    .replace(")", "")
-                    .replace("#", "")
+                    .replace(SINGLE_INVERTED_COMMA, "")
+                    .replace(RIGHT_ROUND_BRACKET, "")
+                    .replace(HASHTAG, "")
                     .trim();
 
-            String[] funcs = aggPart.split(",");
+            String[] funcs = aggPart.split(COMMA);
             List<String> cleaned = new ArrayList<>();
             for (String f : funcs) {
                 f = f.trim();
                 if (f.isEmpty()) continue;
 
                 // Keep only aggregate functions (skip plain column names)
-                if (!f.contains("(")) continue;
+                if (!f.contains(LEFT_ROUND_BRACKET)) continue;
 
                 // Format function properly
                 String fn = f.substring(0, f.indexOf('(')).toUpperCase();
@@ -203,7 +203,7 @@ public class SparkPlanParser {
 
             }
 
-            return String.join(", ", cleaned);
+            return String.join(COMMA+SPACE, cleaned);
         }
         return "";
     }
@@ -231,12 +231,12 @@ public class SparkPlanParser {
 
 
     private String extractHavingCondition(String line) {
-        int start = line.indexOf('(');
-        int end = line.lastIndexOf(')');
+        int start = line.indexOf(LEFT_ROUND_BRACKET);
+        int end = line.lastIndexOf(RIGHT_ROUND_BRACKET);
         if (start != -1 && end != -1 && end > start) {
             return line.substring(start + 1, end)
-                    .replace("'", "")
-                    .replace("#", "")
+                    .replace(SINGLE_INVERTED_COMMA, "")
+                    .replace(HASHTAG, "")
                     .trim();
         }
         return "";

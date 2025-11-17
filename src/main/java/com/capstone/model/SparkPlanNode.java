@@ -4,6 +4,8 @@ import lombok.Data;
 
 import java.util.*;
 
+import static com.capstone.constants.Constants.*;
+
 @Data
 
 public class SparkPlanNode {
@@ -49,6 +51,6 @@ public class SparkPlanNode {
 
     @Override
     public String toString() {
-        return nodeType + "(" + expression + ")";
+        return nodeType + LEFT_ROUND_BRACKET + expression + RIGHT_ROUND_BRACKET;
     }
 }

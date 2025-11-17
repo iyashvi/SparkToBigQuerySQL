@@ -6,7 +6,6 @@ import static com.capstone.constants.Constants.*;
 import org.springframework.stereotype.Component;
 
 
-
 @Component
 public class SelectConverter extends PlanVisitor {
 
@@ -37,14 +36,13 @@ public class SelectConverter extends PlanVisitor {
             case FROM:
                 fromExpr = node.getExpression();
                 break;
-            case "JOIN":
-                // --- JOIN EXTRACTION FIX HERE ---
+            case JOIN:
                 joinTable1 = node.getTable1();
                 joinAlias1 = node.getAlias1();
                 joinTable2 = node.getTable2();
                 joinAlias2 = node.getAlias2();
-                joinType   = node.getJoinType();
-                joinOn     = node.getJoinCondition();
+                joinType = node.getJoinType();
+                joinOn = node.getJoinCondition();
                 break;
             case WHERE:
                 whereExpr = node.getExpression();
@@ -69,6 +67,7 @@ public class SelectConverter extends PlanVisitor {
 
         if (!selectExpr.isEmpty()) queryBuilder.append("SELECT ").append(selectExpr);
         else if (!fromExpr.isEmpty()) queryBuilder.append("SELECT *");
+
         if (!joinTable1.isEmpty()) {
             queryBuilder.append(" FROM ")
                     .append(joinTable1).append(" ").append(joinAlias1);
@@ -76,7 +75,6 @@ public class SelectConverter extends PlanVisitor {
         else if (!fromExpr.isEmpty()) {
             queryBuilder.append(" FROM ").append(fromExpr);
         }
-
 
         if (!joinTable1.isEmpty() && !joinTable2.isEmpty()) {
             queryBuilder.append(" ")

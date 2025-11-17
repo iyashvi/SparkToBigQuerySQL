@@ -80,7 +80,6 @@ public class SparkPlanParser {
                 nodes.add(selectNode);
                 nodes.add(groupNode);
 
-
             }
 
             else if (line.contains("UnresolvedHaving")) {

@@ -50,14 +50,6 @@ public class SQLFileService {
         String fileContent = readSqlFile(filePath);
         String[] queries = fileContent.split("(?<=;)");
 
-//        spark.sql(
-//                "CREATE OR REPLACE TEMP VIEW Employees AS " +
-//                        "SELECT 1 AS EmployeeID, 'John Doe' AS Name, 32 AS Age, 'Sales' AS Department, 52000.0 AS Salary " +
-//                        "UNION ALL SELECT 2, 'Jane Smith', 28, 'Marketing', 45000.0 " +
-//                        "UNION ALL SELECT 3, 'Peter Jones', 46, 'HR', 60000.0 " +
-//                        "UNION ALL SELECT 4, 'Alice Brown', 35, 'Engineering', 75000.0"
-//        );
-
         spark.sql(
                 "CREATE OR REPLACE TEMP VIEW Employees AS " +
                         "SELECT 1 AS EmployeeID, 'John Doe' AS Name, 32 AS Age " +

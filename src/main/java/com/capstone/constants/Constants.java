@@ -50,6 +50,8 @@ public class Constants {
 
     public static final String ON = "ON";
 
+    public static final String ALIAS = "AS";
+
     private Constants() {
     }
 }

@@ -4,6 +4,8 @@ import com.capstone.model.SparkPlanNode;
 import com.capstone.parser.PlanVisitor;
 import org.springframework.stereotype.Component;
 
+
+
 @Component
 public class SelectConverter extends PlanVisitor {
 
@@ -16,6 +18,12 @@ public class SelectConverter extends PlanVisitor {
     private String havingExpr = "";
     private String orderExpr = "";
     private String limitExpr = "";
+    private String joinTable1 = "";
+    private String joinType = "";
+    private String joinTable2 = "";
+    private String joinAlias1 = "";
+    private String joinAlias2 = "";
+    private String joinOn = "";
 
     @Override
     public void visit(SparkPlanNode node) {
@@ -29,7 +37,13 @@ public class SelectConverter extends PlanVisitor {
                 fromExpr = node.getExpression();
                 break;
             case "JOIN":
-                joinExpr = node.getExpression();
+                // --- JOIN EXTRACTION FIX HERE ---
+                joinTable1 = node.getTable1();
+                joinAlias1 = node.getAlias1();
+                joinTable2 = node.getTable2();
+                joinAlias2 = node.getAlias2();
+                joinType   = node.getJoinType();
+                joinOn     = node.getJoinCondition();
                 break;
             case "WHERE":
                 whereExpr = node.getExpression();
@@ -57,38 +71,20 @@ public class SelectConverter extends PlanVisitor {
         queryBuilder.setLength(0);
 
         if (!selectExpr.isEmpty()) queryBuilder.append("SELECT ").append(selectExpr);
-        if (!fromExpr.isEmpty()) queryBuilder.append(" FROM ").append(fromExpr);
-        if (!joinExpr.isEmpty()) {
-            String table1 = "", table2 = "", joinType = "", onCond = "";
-
-            try {
-                // Example joinExpr:
-                // TABLE1=Employees, TABLE2=Department LEFT OUTER ON Employees.EmployeeID = department.EmployeeID
-                int t1s = joinExpr.indexOf("TABLE1=") + 7;
-                int t2s = joinExpr.indexOf("TABLE2=");
-                int joinTypeStart = joinExpr.indexOf(" ", t2s + 7);
-                int onIdx = joinExpr.indexOf(" ON ");
-
-                table1 = joinExpr.substring(t1s, t2s - 2).trim();  // Employees
-                table2 = joinExpr.substring(t2s + 7, joinTypeStart).trim(); // Department
-                joinType = joinExpr.substring(joinTypeStart, onIdx).trim(); // LEFT OUTER
-                onCond = joinExpr.substring(onIdx + 4).trim(); // condition
-
-            } catch (Exception e) {
-                System.err.println("JOIN parsing error: " + e.getMessage());
-            }
-
-            queryBuilder.append(" FROM ")
-                    .append(table1)
-                    .append(" ")
-                    .append(joinType)
-                    .append(" JOIN ")
-                    .append(table2)
-                    .append(" ON ")
-                    .append(onCond);
+        else if (!fromExpr.isEmpty()) queryBuilder.append("SELECT *");
+        if (!joinTable1.isEmpty()) {
+            queryBuilder.append(" FROM ").append(joinTable1);
+            if (!joinAlias1.isEmpty()) queryBuilder.append(" AS ").append(joinAlias1);
+        } else if (!fromExpr.isEmpty()) {
+            queryBuilder.append(" FROM ").append(fromExpr);
         }
 
-
+        if (!joinTable1.isEmpty() && !joinTable2.isEmpty()) {
+            queryBuilder.append(" ").append(joinType)
+                    .append(" ").append(joinTable2);
+            if (!joinAlias2.isEmpty()) queryBuilder.append(" AS ").append(joinAlias2);
+            if (!joinOn.isEmpty()) queryBuilder.append(" ON ").append(joinOn);
+        }
         if (!whereExpr.isEmpty()) queryBuilder.append(" WHERE ").append(whereExpr);
         if (!groupExpr.isEmpty()) queryBuilder.append(" GROUP BY ").append(groupExpr);
         if (!havingExpr.isEmpty()) queryBuilder.append(" HAVING ").append(havingExpr);

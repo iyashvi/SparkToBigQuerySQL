@@ -3,6 +3,7 @@ import com.capstone.model.SparkPlanNode;
 import org.springframework.stereotype.Component;
 
 import java.util.*;
+import java.util.regex.Pattern;
 
 @Component
 public class SparkPlanParser {
@@ -12,6 +13,8 @@ public class SparkPlanParser {
         List<SparkPlanNode> nodes = new ArrayList<>();
         boolean fromAdded = false;   // prevent duplicate FROM
         SparkPlanNode lastJoin = null; // track most recent JOIN
+        String pendingAlias = null;
+
 
 
         for (String line : lines) {
@@ -21,38 +24,44 @@ public class SparkPlanParser {
             SparkPlanNode node = null;
 
             // SELECT
-            if ((line.startsWith("Project") || line.startsWith("'Project")) &&
-                    !line.startsWith("+-") && !line.startsWith(":-") &&
+            if ((line.contains("Project")) &&
                     nodes.stream().noneMatch(n -> n.getNodeType().equals("SELECT"))) {
-                String expr = extractValue(line).replace("'", "").trim();
-                node = new SparkPlanNode("SELECT", expr);
+                //String expr = extractValue(line).replace("'", "").trim();
+                node = new SparkPlanNode("SELECT", extractValue(line));
             }
 
 
             // FROM
+            else if (line.startsWith(":- 'SubqueryAlias") || line.startsWith("+- 'SubqueryAlias")) {
+                pendingAlias = line.split(" ")[2].trim(); // store alias e.g., e or d
+            }
             else if (line.contains("'UnresolvedRelation")) {
-                String tableName = extractValue(line).trim();
+                String table = extractValue(line).trim();
 
                 if (lastJoin != null) {
-                    // Fill in TABLE1 or TABLE2 placeholders
-                    String expr = lastJoin.getExpression();
-                    if (expr.contains("TABLE1=?")) {
-                        expr = expr.replace("TABLE1=?", "TABLE1=" + tableName);
-                    } else if (expr.contains("TABLE2=?")) {
-                        expr = expr.replace("TABLE2=?", "TABLE2=" + tableName);
+                    // This table belongs to the JOIN
+                    if (!lastJoin.hasTable1()) lastJoin.setTable1(table, pendingAlias);
+                    else lastJoin.setTable2(table, pendingAlias);
+                } else {
+                    // No join: normal FROM
+                    if (!fromAdded) {
+                        nodes.add(new SparkPlanNode("FROM", table + (pendingAlias != null ? " AS " + pendingAlias : "")));
+                        fromAdded = true;
                     }
-                    lastJoin.setExpression(expr);
-                } else if (!fromAdded) {
-                    node = new SparkPlanNode("FROM", tableName);
-                    fromAdded = true;
                 }
-            }
 
-            //JOIN
+                pendingAlias = null;
+            }
             else if (line.contains("Join")) {
-                // Create JOIN node with placeholders for table names
-                node = new SparkPlanNode("JOIN", "TABLE1=?, TABLE2=? " + extractJoinDetails(line));
-                lastJoin = node;
+                String joinType = extractJoinType(line);
+                String condition = extractJoinCondition(line);
+
+                SparkPlanNode joinNode = new SparkPlanNode("JOIN", "");
+                joinNode.setJoinType(joinType);
+                joinNode.setJoinCondition(condition);
+
+                lastJoin = joinNode;
+                nodes.add(joinNode);
             }
 
             // WHERE
@@ -60,22 +69,25 @@ public class SparkPlanParser {
                 node = new SparkPlanNode("WHERE", extractFilterCondition(line));
             }
 
-            // GROUP BY (Aggregate node)
+
             else if (line.startsWith("'Aggregate") || line.startsWith("Aggregate")) {
                 String groupExpr = extractGroupByColumns(line);
                 String aggExpr = extractAggregateFunctions(line);
 
-                // Two nodes: GROUP BY and SELECT (aggregations)
                 SparkPlanNode groupNode = new SparkPlanNode("GROUP BY", groupExpr);
                 SparkPlanNode selectNode = new SparkPlanNode("SELECT", aggExpr);
+
                 nodes.add(selectNode);
                 nodes.add(groupNode);
-                continue;
+
+
             }
 
             else if (line.startsWith("'UnresolvedHaving")) {
                 String havingCondition = extractHavingCondition(line);
-                node = new SparkPlanNode("HAVING", havingCondition);
+                SparkPlanNode havingNode = new SparkPlanNode("HAVING", havingCondition);
+                nodes.add(havingNode);
+                continue;
             }
 
 
@@ -99,16 +111,7 @@ public class SparkPlanParser {
         SparkPlanNode root = null;
         SparkPlanNode last = null;
 
-        // Find SELECT node first
-//        for (SparkPlanNode n : nodes) {
-//            if (n.getNodeType().equals("SELECT")) {
-//                root = n;
-//                last = n;
-//                break;
-//            }
-//        }
-
-        for (String type : List.of( "SELECT", "FROM", "JOIN",  "WHERE" , "GROUP BY", "HAVING", "ORDER BY", "LIMIT")) {
+        for (String type : List.of( "SELECT", "FROM", "JOIN", "WHERE" , "GROUP BY", "HAVING", "ORDER BY", "LIMIT")) {
             for (SparkPlanNode n : nodes) {
                 if (n.getNodeType().equals(type)) {
                     if (root == null) {
@@ -190,30 +193,28 @@ public class SparkPlanParser {
         }
         return "";
     }
+    private String extractJoinType(String line) {
+        String lower = line.toLowerCase();
 
-
-    private String extractJoinDetails(String line) {
-        String joinType = "INNER";
-        String condition = "";
-
-        if (line.toLowerCase().contains("left")) joinType = "LEFT OUTER";
-        else if (line.toLowerCase().contains("right")) joinType = "RIGHT OUTER";
-        else if (line.toLowerCase().contains("full")) joinType = "FULL OUTER";
-        else if (line.toLowerCase().contains("cross")) joinType = "CROSS";
-
-        if (line.contains("(") && line.contains(")")) {
-            int s = line.indexOf('(');
-            int e = line.lastIndexOf(')');
-            if (s >= 0 && e > s) {
-                condition = line.substring(s + 1, e)
-                        .replaceAll("#\\d+", "")
-                        .replaceAll("'", "")
-                        .replaceAll("\\s+", " ")
-                        .trim();
-            }
-        }
-        return joinType + " ON " + condition;
+        if (lower.contains("left")) return "LEFT JOIN";
+        if (lower.contains("right")) return "RIGHT JOIN";
+        if (lower.contains("full")) return "FULL JOIN";
+        if (lower.contains("cross")) return "CROSS JOIN";
+        return "INNER JOIN";
     }
+
+    private String extractJoinCondition(String line) {
+        int s = line.indexOf('(');
+        int e = line.lastIndexOf(')');
+        if (s != -1 && e != -1) {
+            return line.substring(s + 1, e)
+                    .replaceAll("#\\d+", "")
+                    .replace("'", "")
+                    .trim();
+        }
+        return "";
+    }
+
 
     private String extractHavingCondition(String line) {
         int start = line.indexOf('(');

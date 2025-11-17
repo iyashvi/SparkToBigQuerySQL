@@ -30,7 +30,6 @@ public class SparkPlanParser {
                 node = new SparkPlanNode("SELECT", extractValue(line));
             }
 
-
             // FROM
             else if (line.startsWith(":- 'SubqueryAlias") || line.startsWith("+- 'SubqueryAlias")) {
                 pendingAlias = line.split(" ")[2].trim(); // store alias e.g., e or d
@@ -71,19 +70,21 @@ public class SparkPlanParser {
 
             // GROUP BY (Aggregate node)
             else if (line.contains("Aggregate")) {
-                String groupExpr = extractGroupByColumns(line);
-                String aggExpr = extractAggregateFunctions(line);
 
-                // Two nodes: GROUP BY and SELECT (aggregations)
+                String groupExpr = extractValue(line);
+                String selectExpr = extractFullSelectList(line);
+                SparkPlanNode selectNode = new SparkPlanNode(SELECT, selectExpr);
                 SparkPlanNode groupNode = new SparkPlanNode(GROUP_BY, groupExpr);
-                SparkPlanNode selectNode = new SparkPlanNode(SELECT, aggExpr);
+
                 nodes.add(selectNode);
                 nodes.add(groupNode);
 
+
             }
 
+            // HAVING
             else if (line.contains("UnresolvedHaving")) {
-                String havingCondition = extractHavingCondition(line);
+                String havingCondition = extractFilterCondition(line);
                 node = new SparkPlanNode(HAVING, havingCondition);
             }
 
@@ -124,119 +125,87 @@ public class SparkPlanParser {
         return root;
     }
 
+    private String replacement(String line, int start, int end) {
+        return line.substring(start + 1, end)
+                .replace(SINGLE_INVERTED_COMMA, "")
+                .replace(HASHTAG, "")
+                .replace("unresolvedalias(", "")
+                .replace("unspecifiedframe$(", "")
+                .replace("None", "")
+                .replaceAll("\\s+", SPACE)
+                .replaceAll("#\\d+", "")
+                .trim();
+    }
+
     private String extractValue(String line) {
         int start = line.indexOf(LEFT_SQUARE_BRACKET);
         int end = line.indexOf(RIGHT_SQUARE_BRACKET);
         if (start != -1 && end != -1 && end > start) {
-            return line.substring(start + 1, end).replace(SINGLE_INVERTED_COMMA, "").trim();
+            return replacement(line, start, end);
         }
         String[] parts = line.split(SPACE);
-        return parts.length > 1 ? parts[1].trim() : "";
+        return parts.length > 1 ? parts[1].trim() : "unknown";
     }
 
     private String extractFilterCondition(String line) {
         int start = line.indexOf(LEFT_ROUND_BRACKET);
         int end = line.lastIndexOf(RIGHT_ROUND_BRACKET);
         if (start != -1 && end != -1 && end > start) {
-            return line.substring(start + 1, end)
-                    .replace(SINGLE_INVERTED_COMMA, "")
-                    .replace(HASHTAG, "")
-                    .trim();
+            replacement(line, start, end);
         }
         return "unknown_condition";
     }
 
-    private String extractGroupByColumns(String line) {
-        int firstStart = line.indexOf(LEFT_SQUARE_BRACKET);
-        int firstEnd = line.indexOf(RIGHT_SQUARE_BRACKET);
-        if (firstStart != -1 && firstEnd != -1) {
-            return line.substring(firstStart + 1, firstEnd)
-                    .replace(SINGLE_INVERTED_COMMA, "")
-                    .replace(HASHTAG, "")
-                    .trim();
-        }
-        return "unknown_group_columns";
-    }
-
-    private String extractAggregateFunctions(String line) {
+    private String extractFullSelectList(String line) {
         int firstEnd = line.indexOf(RIGHT_SQUARE_BRACKET);
         int secondStart = line.indexOf(LEFT_SQUARE_BRACKET, firstEnd + 1);
         int secondEnd = line.indexOf(RIGHT_SQUARE_BRACKET, secondStart + 1);
 
-        if (secondStart != -1 && secondEnd != -1) {
-            String aggPart = line.substring(secondStart + 1, secondEnd)
-                    .replace("unresolvedalias(", "")
-                    .replace("unspecifiedframe$(", "")
-                    .replace("None", "")
-                    .replace(SINGLE_INVERTED_COMMA, "")
-                    .replace(RIGHT_ROUND_BRACKET, "")
-                    .replace(HASHTAG, "")
-                    .trim();
+        if (secondStart == -1 || secondEnd == -1) return "";
 
-            String[] funcs = aggPart.split(COMMA);
-            List<String> cleaned = new ArrayList<>();
-            for (String f : funcs) {
-                f = f.trim();
-                if (f.isEmpty()) continue;
+        String raw = replacement(line, secondStart, secondEnd);
 
-                // Keep only aggregate functions (skip plain column names)
-                if (!f.contains(LEFT_ROUND_BRACKET)) continue;
-
-                // Format function properly
-                String fn = f.substring(0, f.indexOf('(')).toUpperCase();
-                String arg = f.substring(f.indexOf('(') + 1).trim();
-                cleaned.add(fn + "(" + arg + ")");
-
-                // FIX: Extract alias if present in format "sum(salary) AS total_salary"
-                String alias = "";
-                if (arg.contains(" AS ")) {
-                    String[] parts = arg.split(" AS ");
-                    arg = parts[0].trim();
-                    alias = parts[1].trim();
-                }
-
-                String full = fn + "(" + arg + ")";
-                if (!alias.isEmpty()) full += " AS " + alias;
-
-                cleaned.add(full);
-
+        // Split by comma but preserve window functions
+        List<String> parts = new ArrayList<>();
+        int depth = 0;
+        StringBuilder buf = new StringBuilder();
+        for (char c : raw.toCharArray()) {
+            if (c == '(') depth++;
+            if (c == ')') depth--;
+            if (c == ',' && depth == 0) {
+                parts.add(buf.toString().trim());
+                buf.setLength(0);
+            } else {
+                buf.append(c);
             }
-
-            return String.join(COMMA+SPACE, cleaned);
         }
-        return "";
-    }
-    private String extractJoinType(String line) {
-        String lower = line.toLowerCase();
+        if (buf.length() > 0) parts.add(buf.toString().trim());
 
-        if (lower.contains("left")) return "LEFT JOIN";
-        if (lower.contains("right")) return "RIGHT JOIN";
-        if (lower.contains("full")) return "FULL JOIN";
-        if (lower.contains("cross")) return "CROSS JOIN";
-        return "INNER JOIN";
-    }
-
-    private String extractJoinCondition(String line) {
-        int s = line.indexOf('(');
-        int e = line.lastIndexOf(')');
-        if (s != -1 && e != -1) {
-            return line.substring(s + 1, e)
-                    .replaceAll("#\\d+", "")
-                    .replace("'", "")
-                    .trim();
+        // Clean each expression
+        List<String> cleaned = new ArrayList<>();
+        for (String p : parts) {
+            if (p.isEmpty()) continue;
+            cleaned.add(p.trim());
         }
-        return "";
+
+        return String.join(", ", cleaned);
     }
 
+    private String extractJoinDetails(String line) {
+        String joinType = "INNER";
+        String condition = "";
 
-    private String extractHavingCondition(String line) {
-        int start = line.indexOf(LEFT_ROUND_BRACKET);
-        int end = line.lastIndexOf(RIGHT_ROUND_BRACKET);
-        if (start != -1 && end != -1 && end > start) {
-            return line.substring(start + 1, end)
-                    .replace(SINGLE_INVERTED_COMMA, "")
-                    .replace(HASHTAG, "")
-                    .trim();
+        if (line.toLowerCase().contains("left")) joinType = "LEFT OUTER";
+        else if (line.toLowerCase().contains("right")) joinType = "RIGHT OUTER";
+        else if (line.toLowerCase().contains("full")) joinType = "FULL OUTER";
+        else if (line.toLowerCase().contains("cross")) joinType = "CROSS";
+
+        if (line.contains(LEFT_ROUND_BRACKET) && line.contains(RIGHT_ROUND_BRACKET)) {
+            int start = line.indexOf(LEFT_ROUND_BRACKET);
+            int end = line.lastIndexOf(RIGHT_ROUND_BRACKET);
+            if (start >= 0 && end > start) {
+                condition = replacement(line, start, end);
+            }
         }
         return "";
     }

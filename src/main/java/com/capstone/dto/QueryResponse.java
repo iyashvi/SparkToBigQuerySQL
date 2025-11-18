@@ -7,7 +7,6 @@ import java.util.List;
 public class QueryResponse {
     private String bigQuerySql;
     private String logicalPlanText;
-    private String optimizedPlanText;
     private String physicalPlanText;
     private List<String> warnings;
 }

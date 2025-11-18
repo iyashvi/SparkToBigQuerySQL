@@ -37,10 +37,10 @@ public class QueryController {
     }
 
     @PostMapping("/query")
-    public ResponseEntity<QueryResponse> translateQuery(@RequestBody QueryRequest request) throws Exception {
+    public ResponseEntity<FileQueryResponse> translateQuery(@RequestBody QueryRequest request) throws Exception {
         String query = request.getSparkSql();
         log.info("======== BigQuery SQL Conversion for Spark SQL: {} ========", query);
-        QueryResponse resp = sparkPlanService.translateSql(query);
+        FileQueryResponse resp = sparkPlanService.translateSql(query);
         return ResponseEntity.ok(resp);
     }
 
@@ -62,8 +62,8 @@ public class QueryController {
     }
 
     @PostMapping("/dataframe")
-    public ResponseEntity<QueryResponse> convert(@RequestBody DataFrameRequest req) {
-        QueryResponse response = dataFrameService.evaluateDataFrame(req.getDataframeCode());
+    public ResponseEntity<FileQueryResponse> convert(@RequestBody DataFrameRequest req) {
+        FileQueryResponse response = dataFrameService.evaluateDataFrame(req.getDataframeCode());
         return ResponseEntity.ok(response);
     }
 

@@ -1,6 +1,7 @@
 package com.capstone.service;
 
 import com.capstone.config.TableCreation;
+import com.capstone.dto.FileQueryResponse;
 import com.capstone.dto.QueryResponse;
 import com.capstone.extractor.SparkPlanExtractor;
 import com.capstone.model.SparkPlanNode;
@@ -29,8 +30,8 @@ public class DataFrameService {
         this.spark = spark;
     }
 
-    public QueryResponse evaluateDataFrame(String dfCode) {
-        QueryResponse resp = new QueryResponse();
+    public FileQueryResponse evaluateDataFrame(String dfCode) {
+        FileQueryResponse resp = new FileQueryResponse();
         List<String> warnings = new ArrayList<>();
 
         try {
@@ -40,7 +41,7 @@ public class DataFrameService {
             }
 
             // STEP 1: Convert to Spark SQL
-            String sparkSql = convertDataFrameToSql(dfCode);
+            String sparkSql = convertDataFrameToSql(dfCode.replace("\\", ""));
             System.out.println("Generated Spark SQL: " + sparkSql);
 
             tableCreation.createDemoTempViews(); // Test data
@@ -49,8 +50,6 @@ public class DataFrameService {
             // STEP 4: Extract plans
             String logical = extractor.extractLogicalPlan(sparkSql);
             resp.setLogicalPlanText(logical);
-            resp.setOptimizedPlanText(extractor.extractOptimizedPlan(sparkSql));
-            resp.setPhysicalPlanText(extractor.extractPhysicalPlan(sparkSql));
 
             System.out.println("Logical Plan ================= " + logical);
 

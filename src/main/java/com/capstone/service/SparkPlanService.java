@@ -1,6 +1,7 @@
 package com.capstone.service;
 
 import com.capstone.config.TableCreation;
+import com.capstone.dto.FileQueryResponse;
 import com.capstone.dto.QueryResponse;
 import com.capstone.extractor.SparkPlanExtractor;
 import com.capstone.model.SparkPlanNode;
@@ -27,8 +28,8 @@ public class SparkPlanService {
         this.spark = sparkSession;  // Spring injects the SparkSession bean defined in SparkConfig
     }
 
-    public QueryResponse translateSql(String sparkSql) {
-        QueryResponse resp = new QueryResponse();
+    public FileQueryResponse translateSql(String sparkSql) {
+        FileQueryResponse resp = new FileQueryResponse();
         List<String> warnings = new ArrayList<>();
         try {
             tableCreation.createDemoTempViews(); // Test data
@@ -37,12 +38,7 @@ public class SparkPlanService {
             String logical = "";
             try {
                 logical = extractor.extractLogicalPlan(sparkSql);
-                String optimized = extractor.extractOptimizedPlan(sparkSql);
-                String physical = extractor.extractPhysicalPlan(sparkSql);
-
                 resp.setLogicalPlanText(logical);
-                resp.setOptimizedPlanText(optimized);
-                resp.setPhysicalPlanText(physical);
             }
             catch (Exception e) {
                 warnings.add("Error extracting Spark plans: " + e.getMessage());

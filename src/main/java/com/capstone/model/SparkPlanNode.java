@@ -1,5 +1,6 @@
 package com.capstone.model;
 
+import com.capstone.parser.PlanVisitor;
 import lombok.Data;
 
 import java.util.*;
@@ -27,6 +28,7 @@ public class SparkPlanNode {
     }
 
     public void addChild(SparkPlanNode child) { this.children.add(child); }
+
 
     // Join helpers
     public boolean hasTable1() { return table1 != null; }

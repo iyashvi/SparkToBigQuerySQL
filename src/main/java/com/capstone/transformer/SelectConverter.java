@@ -6,6 +6,8 @@ import static com.capstone.constants.Constants.*;
 import org.springframework.stereotype.Component;
 
 import java.util.*;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 @Component
 public class SelectConverter extends PlanVisitor {
@@ -76,22 +78,23 @@ public class SelectConverter extends PlanVisitor {
 
         // JOIN
         if (!joinTable1.isEmpty()) {
-            queryBuilder.append(SPACE + FROM + SPACE)
-                    .append(joinTable1).append(SPACE).append(joinAlias1);
+            queryBuilder.append(SPACE).append(FROM).append(SPACE)
+                    .append(joinTable1).append(safeAlias(joinAlias1));
+
+            if (!joinTable2.isEmpty()) {
+                queryBuilder.append(SPACE)
+                        .append(joinType).append(SPACE)
+                        .append(joinTable2).append(safeAlias(joinAlias2))
+                        .append(SPACE).append(ON).append(SPACE).append(joinOn);
+            }
         }
         else if (!fromExpr.isEmpty()) {
-            queryBuilder.append(SPACE + FROM + SPACE).append(fromExpr);
-        }
-
-        if (!joinTable1.isEmpty() && !joinTable2.isEmpty()) {
-            queryBuilder.append(SPACE)
-                    .append(joinType).append(SPACE)
-                    .append(joinTable2).append(SPACE).append(joinAlias2)
-                    .append(SPACE + ON + SPACE).append(joinOn);
+            queryBuilder.append(SPACE).append(FROM).append(SPACE).append(fromExpr);
         }
 
         // WHERE
         if (!whereExpr.isEmpty()) {
+            whereExpr = fixWhereLiterals(whereExpr);
             queryBuilder.append(SPACE + WHERE + SPACE).append(whereExpr);
         }
 
@@ -102,6 +105,7 @@ public class SelectConverter extends PlanVisitor {
 
         // HAVING
         if (!havingExpr.isEmpty()) {
+            havingExpr = fixWhereLiterals(havingExpr);
             queryBuilder.append(SPACE + HAVING + SPACE).append(havingExpr);
         }
 
@@ -116,6 +120,23 @@ public class SelectConverter extends PlanVisitor {
         }
 
         return queryBuilder.append(SEMI_COLON).toString().trim();
+    }
+
+    private String safeAlias(String alias) {
+        if (alias == null || alias.isBlank()) return "";
+
+        alias = alias.replaceAll("#\\d+", "").trim();
+
+        Matcher m = Pattern.compile("(?i)(.*?)(AS\\s+\\w+)$").matcher(alias);
+        if (m.find()) {
+            return " " + m.group(2).trim();
+        }
+
+        if (alias.toUpperCase().startsWith("AS ")) {
+            return " " + alias;
+        }
+
+        return " AS " + alias;
     }
 
 
@@ -134,16 +155,21 @@ public class SelectConverter extends PlanVisitor {
             if (part.contains("windowspecdefinition")) {
                 part = transformWindowFunction(part);
             }
-            part = part
-                    .replaceAll("unresolvedalias\\(([^,]+), None\\)", "$1")
-                    .replaceAll("\\)+$", ")");
+
+            part = part.replaceAll("(?i)( AS \\w+?)(?:#\\d+|\\d+)\\b", "$1");
+
+            part = part.replaceAll("#\\d+", "");
+
+            part = ensureAlias(part);
+
 
             cleaned.add(part);
+
+
         }
 
         return String.join(COMMA + SPACE, cleaned);
     }
-
 
     private List<String> splitTopLevel(String expr) {
 
@@ -172,10 +198,8 @@ public class SelectConverter extends PlanVisitor {
 
     private String transformWindowFunction(String expr) {
 
-        // Extracting function name: RANK(), DENSE_RANK(), ROW_NUMBER(), SUM(col), etc.
         String func = expr.substring(0, expr.indexOf("windowspecdefinition")).trim();
 
-        // Extracting content inside windowspecdefinition(...)
         int start = expr.indexOf("windowspecdefinition(") + "windowspecdefinition(".length();
         int end = expr.lastIndexOf(")");
         String spec = expr.substring(start, end).trim();
@@ -214,7 +238,25 @@ public class SelectConverter extends PlanVisitor {
 
         over.append(")");
 
-        return func + " " + over;
+        String alias = "";
+        Matcher m = Pattern.compile("(?i)AS\\s+(\\w+)").matcher(expr);
+        if (m.find()) alias = " AS " + m.group(1);
+        return func + " " + over + alias;
+
+    }
+    private String fixWhereLiterals(String expr) {
+        if (expr == null || expr.isBlank()) return expr;
+        return expr.replaceAll("=\\s*(?!')(?!\\d+\\b)(\\w+)", "= '$1'");
+
+    }
+    private String ensureAlias(String expr) {
+        return expr;
     }
 
+
+
+
+
+
 }
+

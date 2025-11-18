@@ -42,7 +42,8 @@ public class SparkPlanParser {
                     else lastJoin.setTable2(table, pendingAlias);
                 }
                 else if (!fromAdded) {
-                    nodes.add(new SparkPlanNode(FROM, table + (pendingAlias != null ? ALIAS + pendingAlias : "")));
+                    nodes.add(new SparkPlanNode(FROM, table + (pendingAlias != null ? " AS " + pendingAlias : "")));
+
                     fromAdded = true;
                 }
 
@@ -187,7 +188,7 @@ public class SparkPlanParser {
         }
         if (!buf.isEmpty()) parts.add(buf.toString().trim());
 
-        // Clean each expression
+
         List<String> cleaned = new ArrayList<>();
         for (String p : parts) {
             if (p.isEmpty()) continue;

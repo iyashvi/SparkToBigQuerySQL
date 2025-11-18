@@ -1,9 +1,12 @@
 package com.capstone.controller;
 
 import com.capstone.constants.URLConstants;
+import com.capstone.dto.DataFrameRequest;
 import com.capstone.dto.FileQueryResponse;
 import com.capstone.dto.QueryRequest;
 import com.capstone.dto.QueryResponse;
+import com.capstone.service.DataFrameService;
+import com.capstone.service.DfFileService;
 import com.capstone.service.SQLFileService;
 import com.capstone.service.SparkPlanService;
 import org.slf4j.Logger;
@@ -19,13 +22,18 @@ import java.util.List;
 @RestController
 @RequestMapping(value = URLConstants.CONVERT_URL)
 public class QueryController {
+
     private final SparkPlanService sparkPlanService;
     private final SQLFileService sqlFileService;
+    private final DataFrameService dataFrameService;
+    private final DfFileService dfFileService;
     private static final Logger log = LoggerFactory.getLogger(QueryController.class);
 
-    public QueryController(SparkPlanService sparkPlanService, SQLFileService sqlFileService) {
+    public QueryController(SparkPlanService sparkPlanService, SQLFileService sqlFileService, DataFrameService dataFrameService, DfFileService dfFileService) {
         this.sparkPlanService = sparkPlanService;
         this.sqlFileService = sqlFileService;
+        this.dataFrameService = dataFrameService;
+        this.dfFileService = dfFileService;
     }
 
     @PostMapping("/query")
@@ -47,6 +55,29 @@ public class QueryController {
             File tempFile = File.createTempFile("upload_", ".sql");
             file.transferTo(tempFile);
             List<FileQueryResponse> response = sqlFileService.extractQueriesFromFile(tempFile.getAbsolutePath());
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+    }
+
+    @PostMapping("/dataframe")
+    public ResponseEntity<QueryResponse> convert(@RequestBody DataFrameRequest req) {
+        QueryResponse response = dataFrameService.evaluateDataFrame(req.getDataframeCode());
+        return ResponseEntity.ok(response);
+    }
+
+    @PostMapping("/dfFile")
+    public ResponseEntity<List<FileQueryResponse>> translateDfFile(@RequestParam("file") MultipartFile file) throws Exception {
+        if (file == null || file.isEmpty()) {
+            return ResponseEntity.badRequest().build();
+        }
+        log.info("Received file: {}", file.getOriginalFilename());
+        log.info("File size: {}", file.getSize());
+        try {
+            File tempFile = File.createTempFile("upload_", ".txt");
+            file.transferTo(tempFile);
+            List<FileQueryResponse> response = dfFileService.extractQueriesFromFile(tempFile.getAbsolutePath());
             return ResponseEntity.ok(response);
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();

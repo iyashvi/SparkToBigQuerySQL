@@ -1,5 +1,6 @@
 package com.capstone.service;
 
+import com.capstone.config.TableCreation;
 import com.capstone.dto.FileQueryResponse;
 import com.capstone.extractor.SparkPlanExtractor;
 import com.capstone.model.SparkPlanNode;
@@ -22,11 +23,13 @@ public class SQLFileService {
 
     private static final Logger log = LoggerFactory.getLogger(SQLFileService.class);
 
+    private final TableCreation tableCreation;
     private final SparkPlanExtractor extractor;
     private final SparkPlanParser parser;
     private final SparkSession spark;
 
-    public SQLFileService(SparkPlanExtractor extractor, SparkPlanParser parser, SparkSession sparkSession) {
+    public SQLFileService(TableCreation tableCreation, SparkPlanExtractor extractor, SparkPlanParser parser, SparkSession sparkSession) {
+        this.tableCreation = tableCreation;
         this.extractor = extractor;
         this.parser = parser;
         this.spark = sparkSession;  // Spring injects the SparkSession bean defined in SparkConfig
@@ -50,21 +53,7 @@ public class SQLFileService {
         String fileContent = readSqlFile(filePath);
         String[] queries = fileContent.split("(?<=;)");
 
-        spark.sql(
-                "CREATE OR REPLACE TEMP VIEW Employees AS " +
-                        "SELECT 1 AS EmployeeID, 'John Doe' AS Name, 32 AS Age " +
-                        "UNION ALL SELECT 2 AS EmployeeID , 'Jane Smith' AS Name, 28 AS Age " +
-                        "UNION ALL SELECT 3 AS EmployeeID, 'Peter Jones' AS Name, 46 AS Age " +
-                        "UNION ALL SELECT 4 AS EmployeeID, 'Alice Brown' AS Name, 35 AS Age "
-        );
-
-        spark.sql(
-                "CREATE OR REPLACE TEMP VIEW Department AS " +
-                        "SELECT 1 AS EmployeeID, 'Sales' AS Dept, 52000.0 AS Salary " +
-                        "UNION ALL SELECT 2 AS EmployeeID,  'Marketing' AS Dept, 45000.0 AS Salary " +
-                        "UNION ALL SELECT 3 AS EmployeeID,  'HR' AS Dept, 60000.0 AS Salary " +
-                        "UNION ALL SELECT 4 AS EmployeeID, 'Engineering' AS Dept, 75000.0 AS Salary "
-        );
+        tableCreation.createDemoTempViews(); // Test data
 
         for (String query : queries) {
             String trimmedQuery = query.trim();

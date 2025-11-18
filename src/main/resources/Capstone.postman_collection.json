@@ -9,15 +9,12 @@
 	},
 	"item": [
 		{
-			"name": "Spark Query to BigQuery",
+			"name": "Spark SQL to BigQuery",
 			"event": [
 				{
 					"listen": "test",
 					"script": {
 						"exec": [
-							"pm.test(\"Successful POST request\", function () {",
-							"    pm.expect(pm.response.code).to.be.oneOf([200, 201]);",
-							"});",
 							""
 						],
 						"type": "text/javascript",
@@ -26,12 +23,15 @@
 					}
 				}
 			],
+			"protocolProfileBehavior": {
+				"disabledSystemHeaders": {}
+			},
 			"request": {
 				"method": "POST",
 				"header": [],
 				"body": {
 					"mode": "raw",
-					"raw": "{\n\t\"name\": \"Add your name in the body\"\n}",
+					"raw": "{\n  \"sparkSql\": \"SELECT e.EmployeeID, e.Name, e.Age, Department.Dept, Department.Salary, RANK() OVER (PARTITION BY Department.Dept ORDER BY Department.Salary DESC) AS salaryRanking, DENSE_RANK() OVER (PARTITION BY Department.Dept ORDER BY e.Age ASC) AS ageRanking, ROW_NUMBER() OVER (ORDER BY Department.Salary DESC) departmentRowNum, SUM(Department.Salary) OVER (PARTITION BY Department.Dept) AS rollingTotalSalary, AVG(Department.Salary) AS averageSalary FROM Employees AS e JOIN Department ON e.EmployeeID = Department.EmployeeID WHERE e.Age > 25 AND Department.dept = 'IT' GROUP BY e.EmployeeID, e.Name, e.Age, Department.Dept, Department.Salary HAVING AVG(Department.Salary) > 30000 ORDER BY Department.Salary DESC LIMIT 10;\"\n}",
 					"options": {
 						"raw": {
 							"language": "json"
@@ -39,22 +39,14 @@
 					}
 				},
 				"url": {
-					"raw": "{{hostname}}/convert?inputpath=C:/Users/DELL/Desktop/NuoData/ssis-to-pyspark/input&outputpath=C:/Users/DELL/Desktop/NuoData/ssis-to-pyspark/outputC:\\Users\\HP\\Desktop\\Nuodata",
+					"raw": "{{hostname}}/v1/convert/query",
 					"host": [
 						"{{hostname}}"
 					],
 					"path": [
-						"convert"
-					],
-					"query": [
-						{
-							"key": "inputpath",
-							"value": "C:/Users/DELL/Desktop/NuoData/ssis-to-pyspark/input"
-						},
-						{
-							"key": "outputpath",
-							"value": "C:/Users/DELL/Desktop/NuoData/ssis-to-pyspark/outputC:\\Users\\HP\\Desktop\\Nuodata"
-						}
+						"v1",
+						"convert",
+						"query"
 					]
 				},
 				"description": "This is a POST request, submitting data to an API via the request body. This request submits JSON data, and the data is reflected in the response.\n\nA successful POST request typically returns a `200 OK` or `201 Created` response code."
@@ -72,6 +64,12 @@
 						{
 							"key": "file",
 							"type": "file",
+							"src": "/C:/Users/HP/Documents/WORK/SparkQueries1.sql",
+							"disabled": true
+						},
+						{
+							"key": "file",
+							"type": "file",
 							"src": "/C:/Users/HP/Documents/WORK/SparkQueries.sql"
 						}
 					]
@@ -85,6 +83,63 @@
 						"v1",
 						"convert",
 						"sqlFile"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Spark DF to BigQuery",
+			"request": {
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\r\n  \"dataframeCode\": \"spark.table(\\\"Employees\\\").select(\\\"name\\\", \\\"age\\\").filter(\\\"age BETWEEN 30 AND 40\\\")\"\r\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "{{hostname}}/v1/convert/dataframe",
+					"host": [
+						"{{hostname}}"
+					],
+					"path": [
+						"v1",
+						"convert",
+						"dataframe"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "DFCode File",
+			"request": {
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "formdata",
+					"formdata": [
+						{
+							"key": "file",
+							"type": "file",
+							"src": "/C:/Users/HP/Documents/WORK/Spark_to_BigQuery_Capstone/src/main/resources/SparkDataFrame.txt"
+						}
+					]
+				},
+				"url": {
+					"raw": "{{hostname}}/v1/convert/dfFile",
+					"host": [
+						"{{hostname}}"
+					],
+					"path": [
+						"v1",
+						"convert",
+						"dfFile"
 					]
 				}
 			},

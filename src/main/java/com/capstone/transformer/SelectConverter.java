@@ -26,6 +26,8 @@ public class SelectConverter extends PlanVisitor {
     private String joinAlias1 = "";
     private String joinAlias2 = "";
     private String joinOn = "";
+    private String explodeColumn = "";
+    private String explodeAlias = "";
 
     @Override
     public void visit(SparkPlanNode node) {
@@ -40,6 +42,12 @@ public class SelectConverter extends PlanVisitor {
             case FROM:
                 fromExpr = node.getExpression();
                 break;
+
+            case LATERAL_VIEW:
+                explodeColumn = node.getExpression();
+                explodeAlias  = node.getAlias1();
+                break;
+
             case JOIN:
                 joinTable1 = node.getTable1();
                 joinAlias1 = node.getAlias1();
@@ -48,7 +56,8 @@ public class SelectConverter extends PlanVisitor {
                 joinType   = node.getJoinType();
                 joinOn     = node.getJoinCondition();
                 break;
-            case WHERE:
+
+                case WHERE:
                 whereExpr = node.getExpression();
                 break;
             case GROUP_BY:
@@ -64,6 +73,7 @@ public class SelectConverter extends PlanVisitor {
                 limitExpr = node.getExpression();
                 break;
         }
+
     }
 
     public String getQuery() {
@@ -76,6 +86,7 @@ public class SelectConverter extends PlanVisitor {
         }
         else if (!fromExpr.isEmpty()) queryBuilder.append(SELECT + "*");
 
+
         // JOIN
         if (!joinTable1.isEmpty()) {
             queryBuilder.append(SPACE).append(FROM).append(SPACE)
@@ -86,12 +97,30 @@ public class SelectConverter extends PlanVisitor {
                         .append(joinType).append(SPACE)
                         .append(joinTable2).append(safeAlias(joinAlias2))
                         .append(SPACE).append(ON).append(SPACE).append(joinOn);
+
             }
         }
         else if (!fromExpr.isEmpty()) {
             queryBuilder.append(SPACE).append(FROM).append(SPACE).append(fromExpr);
         }
 
+        // Explode -> unnest
+        if (!explodeColumn.isEmpty()) {
+            String baseAlias = "";
+            if (fromExpr.contains(" AS ")) {
+                baseAlias = fromExpr.split(" AS ")[1].trim();
+            } else {
+                baseAlias = fromExpr.trim();
+            }
+            queryBuilder.append(", UNNEST(")
+                    .append(baseAlias)
+                    .append(".")
+                    .append(explodeColumn)
+                    .append(")");
+            if (!explodeAlias.isEmpty()) {
+                queryBuilder.append(" AS ").append(explodeAlias);
+            }
+        }
         // WHERE
         if (!whereExpr.isEmpty()) {
             whereExpr = fixWhereLiterals(whereExpr);
@@ -139,7 +168,6 @@ public class SelectConverter extends PlanVisitor {
         return " AS " + alias;
     }
 
-
     private String transformSelectExpr(String expr) {
 
         expr = expr.replaceAll(",\\s*\\)", ")")
@@ -154,6 +182,10 @@ public class SelectConverter extends PlanVisitor {
 
             if (part.contains("windowspecdefinition")) {
                 part = transformWindowFunction(part);
+            }
+            if (part.toLowerCase().startsWith("map_keys(")) {
+                String col = part.substring("map_keys(".length(), part.length() - 1).trim();
+                part = "ARRAY(SELECT elem.key FROM UNNEST(" + col + ") AS elem) AS keys";
             }
 
             part = part.replaceAll("(?i)( AS \\w+?)(?:#\\d+|\\d+)\\b", "$1");
@@ -252,10 +284,6 @@ public class SelectConverter extends PlanVisitor {
     private String ensureAlias(String expr) {
         return expr;
     }
-
-
-
-
 
 
 }

@@ -52,6 +52,8 @@ public class Constants {
 
     public static final String ALIAS = "AS";
 
+    public static final String LATERAL_VIEW = "LATERAL_VIEW";
+
     private Constants() {
     }
 }

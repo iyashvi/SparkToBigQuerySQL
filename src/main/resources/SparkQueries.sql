@@ -168,3 +168,16 @@ JOIN
 ORDER BY
     d.Salary DESC
 LIMIT 2;
+
+
+-- 14. map_keys -> array<struct>
+SELECT
+map_keys(OrderDetails)
+FROM Orders AS o;
+
+
+-- 15. explode() -> unnest()
+SELECT OrderId,
+ex
+FROM orders AS o
+LATERAL VIEW explode(items) AS ex;

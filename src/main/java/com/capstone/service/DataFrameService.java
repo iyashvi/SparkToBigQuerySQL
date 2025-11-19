@@ -2,7 +2,6 @@ package com.capstone.service;
 
 import com.capstone.config.TableCreation;
 import com.capstone.dto.FileQueryResponse;
-import com.capstone.dto.QueryResponse;
 import com.capstone.extractor.SparkPlanExtractor;
 import com.capstone.model.SparkPlanNode;
 import com.capstone.parser.PlanWalker;
@@ -14,6 +13,8 @@ import org.springframework.stereotype.Service;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+
+import static com.capstone.constants.Constants.*;
 
 @Service
 public class DataFrameService {
@@ -120,7 +121,7 @@ public class DataFrameService {
         // BUILD SQL
 
         StringBuilder sql = new StringBuilder("SELECT ");
-        sql.append(!agg.isEmpty() ? String.join(", ", agg) : select);
+        sql.append(!agg.isEmpty() ? String.join(COMMA, agg) : select);
         sql.append(" FROM ").append(baseTable);
 
 
@@ -136,12 +137,12 @@ public class DataFrameService {
     }
 
     private String extractBalanced(String expr) {
-        int start = expr.indexOf("(") + 1;
+        int start = expr.indexOf(LEFT_ROUND_BRACKET) + 1;
         int end = findClosingParen(expr, start - 1);
         if (start < 0 || end < 0 || end <= start) return "";
         return expr.substring(start, end)
-                .replace("\"", "")
-                .replace("'", "")
+                .replace(QUOTES, "")
+                .replace(SINGLE_INVERTED_COMMA, "")
                 .trim();
     }
 

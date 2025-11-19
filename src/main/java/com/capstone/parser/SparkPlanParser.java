@@ -2,9 +2,7 @@ package com.capstone.parser;
 import com.capstone.model.SparkPlanNode;
 import static com.capstone.constants.Constants.*;
 import org.springframework.stereotype.Component;
-
 import java.util.*;
-
 @Component
 public class SparkPlanParser {
 
@@ -48,6 +46,27 @@ public class SparkPlanParser {
                 }
 
                 pendingAlias = null;
+            }
+
+            else if (line.contains("Generate") && line.contains("explode")) {
+                String col = "";
+                int s = line.indexOf("explode(");
+                if (s != -1) {
+                    s += "explode(".length();
+                    int e = line.indexOf(")", s);
+                    col = line.substring(s, e).replace("'", "").trim();   // skills or e.skills
+                }
+
+                String alias = "";
+                if (line.contains("[")) {
+                    int s2 = line.indexOf("[") + 1;
+                    int e2 = line.indexOf("]", s2);
+                    alias = line.substring(s2, e2).replace("'", "").trim();  // ex
+                }
+                node = new SparkPlanNode("LATERAL_VIEW", col);
+                node.setAlias1(alias);  // store explode alias (ex)
+                nodes.add(node);
+                continue;
             }
 
             //JOIN
@@ -106,7 +125,8 @@ public class SparkPlanParser {
         SparkPlanNode root = null;
         SparkPlanNode last = null;
 
-        for (String type : List.of( SELECT, FROM, JOIN,  WHERE , GROUP_BY, HAVING, ORDER_BY, LIMIT)) {
+        for (String type : List.of( SELECT, FROM, LATERAL_VIEW, JOIN, WHERE, GROUP_BY, HAVING, ORDER_BY, LIMIT ))
+        {
             for (SparkPlanNode n : nodes) {
                 if (n.getNodeType().equals(type)) {
                     if (root == null) {

@@ -60,7 +60,6 @@ public class DataFrameService {
             SparkPlanNode root = parser.parse(logical);
             PlanWalker walker = new PlanWalker();
             SelectConverter converter = new SelectConverter();
-            converter.reset();
             walker.walk(root, converter);
 
             resp.setBigQuerySql(converter.getQuery());

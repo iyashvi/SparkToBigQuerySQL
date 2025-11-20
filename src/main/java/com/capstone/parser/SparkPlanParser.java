@@ -2,7 +2,9 @@ package com.capstone.parser;
 import com.capstone.model.SparkPlanNode;
 import static com.capstone.constants.Constants.*;
 import org.springframework.stereotype.Component;
+
 import java.util.*;
+
 @Component
 public class SparkPlanParser {
 
@@ -40,8 +42,7 @@ public class SparkPlanParser {
                     else lastJoin.setTable2(table, pendingAlias);
                 }
                 else if (!fromAdded) {
-                    nodes.add(new SparkPlanNode(FROM, table + (pendingAlias != null ? " AS " + pendingAlias : "")));
-
+                    nodes.add(new SparkPlanNode(FROM, table + (pendingAlias != null ? ALIAS + pendingAlias : "")));
                     fromAdded = true;
                 }
 
@@ -114,6 +115,11 @@ public class SparkPlanParser {
                 node = new SparkPlanNode(LIMIT, extractValue(line));
             }
 
+            // OFFSET
+            else if (line.contains("Offset")) {
+                node = new SparkPlanNode(OFFSET, extractValue(line));
+            }
+
             if (node != null) {
                 System.out.println("=====node: " + node);  // -- For Debugging
                 nodes.add(node);
@@ -121,11 +127,10 @@ public class SparkPlanParser {
         }
 
 
-        // Correct SQL order (SELECT → FROM → JOIN ->  WHERE → ORDER → LIMIT)
         SparkPlanNode root = null;
         SparkPlanNode last = null;
 
-        for (String type : List.of( SELECT, FROM, LATERAL_VIEW, JOIN, WHERE, GROUP_BY, HAVING, ORDER_BY, LIMIT ))
+        for (String type : List.of( SELECT, FROM, LATERAL_VIEW, JOIN, WHERE, GROUP_BY, HAVING, ORDER_BY, LIMIT, OFFSET))
         {
             for (SparkPlanNode n : nodes) {
                 if (n.getNodeType().equals(type)) {
@@ -147,8 +152,8 @@ public class SparkPlanParser {
                 .replace(SINGLE_INVERTED_COMMA, "")
                 .replace(HASHTAG, "")
                 .replace("unresolvedalias(", "")
-                .replace("unspecifiedframe$(", "")
-                .replace("None", "")
+                .replace("unspecifiedframe$()", "")
+                .replace("None),", "")
                 .replaceAll("\\s+", SPACE)
                 .replaceAll("#\\d+", "")
                 .trim();
@@ -160,6 +165,7 @@ public class SparkPlanParser {
         if (start != -1 && end != -1 && end > start) {
             return replacement(line, start, end);
         }
+        line = line.replace("+-", "").trim();
         String[] parts = line.split(SPACE);
         return parts.length > 1 ? parts[1].trim() : "unknown_value";
     }
@@ -182,6 +188,7 @@ public class SparkPlanParser {
         if (lower.contains("cross")) return "CROSS JOIN";
         return "INNER JOIN";
     }
+
 
     private String extractFullSelectList(String line) {
         int firstEnd = line.indexOf(RIGHT_SQUARE_BRACKET);
@@ -207,7 +214,6 @@ public class SparkPlanParser {
             }
         }
         if (!buf.isEmpty()) parts.add(buf.toString().trim());
-
 
         List<String> cleaned = new ArrayList<>();
         for (String p : parts) {

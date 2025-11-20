@@ -1,23 +1,26 @@
-spark.table(\"Employees\").groupBy(\"age\").agg(\"AVG(age) as avg_age\")
+spark.table('Employees').alias('e').join(spark.table('Department').alias('d'), 'EmployeeID','right').select('e.Name', 'e.Age', 'd.Dept');
 
-spark.table(\"Employees\").select(\"name\", \"age\").orderBy(\"age DESC\").limit(5)
+"spark.table('Employees').join(spark.table('Department'), 'EmployeeID').select('Name', 'Age', 'Dept');"
 
-spark.table(\"Employees\").select(\"name\", \"age\").limit(5)
+spark.table('Employees').alias(e).groupBy('age').agg('sum(age)').having('sum(age)' > 10000);
 
-spark.table(\"Employees\").select(\"name\", \"age\").filter(\"age > 50\")
+spark.table('Employees').groupBy('age').agg('AVG(age) as avg_age');
 
-spark.table(\"Employees\").select(\"name\", \"age\")
+spark.table('Employees').select('name', 'age').orderBy('age DESC').limit(5);
 
-spark.table(\"Employees\")
+spark.table('Employees').select('name', 'age').limit(5);
 
-spark.table(\"Employees\").groupBy(\"age\").agg(avg(\"age\"))
+spark.table('Employees').select('name', 'age').filter('age > 50');
 
-spark.table(\"Employees\").groupBy(\"age\").agg(\"MAX(age) as max_age, AVG(age) as avg_age\")
+spark.table('Employees').select('name', 'age');
 
-spark.table(\"Employees\").groupBy(\"age\").agg(\"avg(age) as AvgAge\").having(\"AvgAge > 50\").select(\"Age\", \"AvgAge\")
+spark.table('Employees');
 
-spark.table(\"Employees\").select(\"name\", \"age\").filter(\"age BETWEEN 30 AND 40\")
+spark.table('Employees').groupBy('age').agg('MAX(age) as max_age, AVG(age) as avg_age');
 
-spark.table(\"Department\").groupBy(\"dept\").agg(\"MAX(salary) as max_salary, MIN(salary) as min_salary\")
+spark.table('Employees').groupBy('age').agg('avg(age) as AvgAge').having('AvgAge > 50').select('Age', 'AvgAge');
 
-spark.table(\"Department\").groupBy(\"dept\").agg(\"COUNT(*) as count_dept\").orderBy(\"count_dept DESC\")
+spark.table('Employees').select('name', 'age').filter('age BETWEEN 30 AND 40');
+
+spark.table('Department').groupBy('dept').agg('COUNT(*) as count_dept').orderBy('count_dept DESC');
+

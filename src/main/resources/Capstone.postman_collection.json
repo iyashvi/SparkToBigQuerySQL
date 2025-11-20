@@ -31,7 +31,7 @@
 				"header": [],
 				"body": {
 					"mode": "raw",
-					"raw": "{\n  \"sparkSql\": \"SELECT e.EmployeeID, e.Name, e.Age, Department.Dept, Department.Salary, RANK() OVER (PARTITION BY Department.Dept ORDER BY Department.Salary DESC) AS salaryRanking, DENSE_RANK() OVER (PARTITION BY Department.Dept ORDER BY e.Age ASC) AS ageRanking, ROW_NUMBER() OVER (ORDER BY Department.Salary DESC) departmentRowNum, SUM(Department.Salary) OVER (PARTITION BY Department.Dept) AS rollingTotalSalary, AVG(Department.Salary) AS averageSalary FROM Employees AS e JOIN Department ON e.EmployeeID = Department.EmployeeID WHERE e.Age > 25 AND Department.dept = 'IT' GROUP BY e.EmployeeID, e.Name, e.Age, Department.Dept, Department.Salary HAVING AVG(Department.Salary) > 30000 ORDER BY Department.Salary DESC LIMIT 10;\"\n}",
+					"raw": "{\n    \"sparkSql\": \"SELECT e.EmployeeID, e.Name, e.Age, e.Dept, NVL(e.Salary, 0) AS SalaryWithDefault, CAST(e.Salary AS DECIMAL(10,2)) AS PreciseSalary, e.Age + 5 AS AgePlusFive, CASE WHEN e.Age < 25 THEN 'Young Employee' WHEN e.Age BETWEEN 25 AND 40 THEN 'Mid-Aged Employee' ELSE 'Senior Employee' END AS AgeCategory, RANK() OVER (PARTITION BY e.Dept ORDER BY e.Salary DESC) AS SalaryRank, DENSE_RANK() OVER (PARTITION BY e.Dept ORDER BY e.Age ASC) AS AgeRank, ROW_NUMBER() OVER (ORDER BY e.Salary DESC) AS GlobalRowNum, SUM(e.Salary) OVER (PARTITION BY e.Dept) AS DeptTotalSalary, AVG(e.Salary) OVER (PARTITION BY e.Dept) AS DeptAverageSalary, o.OrderID, COALESCE(o.TotalAmount, 0) AS TotalAmountWithDefault, TO_DATE(o.OrderDate) AS OrderDateFormatted, CASE WHEN o.TotalAmount > 100 THEN 'High Value' ELSE 'Normal Value' END AS OrderValueCategory, item AS ExplodedItem FROM Employees e LEFT JOIN Orders o ON e.EmployeeID = o.CustomerID LATERAL VIEW EXPLODE(o.Items) AS item WHERE e.Age > 20 AND LOWER(e.Dept) LIKE '%it%' GROUP BY e.EmployeeID, e.Name, e.Age, e.Dept, e.Salary, o.OrderID, o.TotalAmount, o.OrderDate, item HAVING AVG(e.Salary) > 20000 ORDER BY e.Dept ASC, e.Salary DESC LIMIT 10 OFFSET 0;\"\n}",
 					"options": {
 						"raw": {
 							"language": "json"
@@ -64,13 +64,7 @@
 						{
 							"key": "file",
 							"type": "file",
-							"src": "/C:/Users/HP/Documents/WORK/SparkQueries1.sql",
-							"disabled": true
-						},
-						{
-							"key": "file",
-							"type": "file",
-							"src": "/C:/Users/HP/Documents/WORK/SparkQueries.sql"
+							"src": "/C:/Users/HP/Documents/WORK/Spark_to_BigQuery_Capstone/src/main/resources/Final_Spark_to_BigQuery_Test_File.sql"
 						}
 					]
 				},

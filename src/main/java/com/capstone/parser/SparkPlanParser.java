@@ -34,7 +34,7 @@ public class SparkPlanParser {
 
             // FROM
             else if (line.contains("'UnresolvedRelation")) {
-                String table = extractValue(line).trim();
+                String table = BACK_TICK + extractValue(line).trim() + BACK_TICK;
 
                 if (lastJoin != null) {
                     // This table belongs to the JOIN
@@ -43,7 +43,6 @@ public class SparkPlanParser {
                 }
                 else if (!fromAdded) {
                     nodes.add(new SparkPlanNode(FROM, table + (pendingAlias != null ? " AS " + pendingAlias : "")));
-
                     fromAdded = true;
                 }
 
@@ -95,18 +94,23 @@ public class SparkPlanParser {
                 node = new SparkPlanNode(LIMIT, extractValue(line));
             }
 
+            // OFFSET
+            else if (line.contains("Offset")) {
+                node = new SparkPlanNode(OFFSET, extractValue(line));
+            }
+
+
             if (node != null) {
                 System.out.println("=====node: " + node);  // -- For Debugging
                 nodes.add(node);
             }
         }
 
-
-        // Correct SQL order (SELECT → FROM → JOIN ->  WHERE → ORDER → LIMIT)
+        // Correct SQL order
         SparkPlanNode root = null;
         SparkPlanNode last = null;
 
-        for (String type : List.of( SELECT, FROM, JOIN,  WHERE , GROUP_BY, HAVING, ORDER_BY, LIMIT)) {
+        for (String type : List.of( SELECT, FROM, JOIN,  WHERE , GROUP_BY, HAVING, ORDER_BY, LIMIT, OFFSET)) {
             for (SparkPlanNode n : nodes) {
                 if (n.getNodeType().equals(type)) {
                     if (root == null) {
@@ -127,8 +131,8 @@ public class SparkPlanParser {
                 .replace(SINGLE_INVERTED_COMMA, "")
                 .replace(HASHTAG, "")
                 .replace("unresolvedalias(", "")
-                .replace("unspecifiedframe$(", "")
-                .replace("None", "")
+                .replace("unspecifiedframe$()", "")
+                .replace("None),", "")
                 .replaceAll("\\s+", SPACE)
                 .replaceAll("#\\d+", "")
                 .trim();
@@ -140,6 +144,7 @@ public class SparkPlanParser {
         if (start != -1 && end != -1 && end > start) {
             return replacement(line, start, end);
         }
+        line = line.replace("+-", "").trim();
         String[] parts = line.split(SPACE);
         return parts.length > 1 ? parts[1].trim() : "unknown_value";
     }
@@ -187,7 +192,6 @@ public class SparkPlanParser {
             }
         }
         if (!buf.isEmpty()) parts.add(buf.toString().trim());
-
 
         List<String> cleaned = new ArrayList<>();
         for (String p : parts) {

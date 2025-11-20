@@ -2,7 +2,6 @@ package com.capstone.service;
 
 import com.capstone.config.TableCreation;
 import com.capstone.dto.FileQueryResponse;
-import com.capstone.dto.QueryResponse;
 import com.capstone.extractor.SparkPlanExtractor;
 import com.capstone.model.SparkPlanNode;
 import com.capstone.parser.PlanWalker;

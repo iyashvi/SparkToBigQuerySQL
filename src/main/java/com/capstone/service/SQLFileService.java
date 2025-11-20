@@ -1,8 +1,6 @@
 package com.capstone.service;
 
 import com.capstone.dto.FileQueryResponse;
-import com.capstone.extractor.SparkPlanExtractor;
-import com.capstone.parser.SparkPlanParser;
 import org.apache.spark.sql.*;
 import org.springframework.stereotype.Service;
 import org.slf4j.Logger;

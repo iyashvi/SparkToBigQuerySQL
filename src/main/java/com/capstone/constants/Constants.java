@@ -12,6 +12,8 @@ public class Constants {
 
     public static final String BACK_SLASH = "/";
 
+    public static final String BACK_TICK = "`";
+
     public static final String SEMI_COLON = ";";
 
     public static final String NEW_LINE = "\n";
@@ -44,13 +46,19 @@ public class Constants {
 
     public static final String LIMIT = "LIMIT";
 
+    public static final String OFFSET = "OFFSET";
+
     public static final String GROUP_BY = "GROUP BY";
 
     public static final String HAVING = "HAVING";
 
     public static final String ON = "ON";
 
-    public static final String ALIAS = "AS";
+    public static final String ALIAS = " AS ";
+
+    public static final String OVER = "OVER ";
+
+    public static final String PARTITION_BY = "PARTITION BY ";
 
     private Constants() {
     }

@@ -60,6 +60,8 @@ public class Constants {
 
     public static final String PARTITION_BY = "PARTITION BY ";
 
+    public static final String LATERAL_VIEW = "LATERAL_VIEW";
+
     private Constants() {
     }
 }

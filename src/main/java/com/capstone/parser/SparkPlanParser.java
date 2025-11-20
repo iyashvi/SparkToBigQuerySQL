@@ -2,9 +2,7 @@ package com.capstone.parser;
 import com.capstone.model.SparkPlanNode;
 import static com.capstone.constants.Constants.*;
 import org.springframework.stereotype.Component;
-
 import java.util.*;
-
 @Component
 public class SparkPlanParser {
 
@@ -34,7 +32,7 @@ public class SparkPlanParser {
 
             // FROM
             else if (line.contains("'UnresolvedRelation")) {
-                String table = BACK_TICK + extractValue(line).trim() + BACK_TICK;
+                String table = extractValue(line).trim();
 
                 if (lastJoin != null) {
                     // This table belongs to the JOIN
@@ -43,10 +41,32 @@ public class SparkPlanParser {
                 }
                 else if (!fromAdded) {
                     nodes.add(new SparkPlanNode(FROM, table + (pendingAlias != null ? " AS " + pendingAlias : "")));
+
                     fromAdded = true;
                 }
 
                 pendingAlias = null;
+            }
+
+            else if (line.contains("Generate") && line.contains("explode")) {
+                String col = "";
+                int s = line.indexOf("explode(");
+                if (s != -1) {
+                    s += "explode(".length();
+                    int e = line.indexOf(")", s);
+                    col = line.substring(s, e).replace("'", "").trim();   // skills or e.skills
+                }
+
+                String alias = "";
+                if (line.contains("[")) {
+                    int s2 = line.indexOf("[") + 1;
+                    int e2 = line.indexOf("]", s2);
+                    alias = line.substring(s2, e2).replace("'", "").trim();  // ex
+                }
+                node = new SparkPlanNode("LATERAL_VIEW", col);
+                node.setAlias1(alias);  // store explode alias (ex)
+                nodes.add(node);
+                continue;
             }
 
             //JOIN
@@ -94,23 +114,19 @@ public class SparkPlanParser {
                 node = new SparkPlanNode(LIMIT, extractValue(line));
             }
 
-            // OFFSET
-            else if (line.contains("Offset")) {
-                node = new SparkPlanNode(OFFSET, extractValue(line));
-            }
-
-
             if (node != null) {
                 System.out.println("=====node: " + node);  // -- For Debugging
                 nodes.add(node);
             }
         }
 
-        // Correct SQL order
+
+        // Correct SQL order (SELECT → FROM → JOIN ->  WHERE → ORDER → LIMIT)
         SparkPlanNode root = null;
         SparkPlanNode last = null;
 
-        for (String type : List.of( SELECT, FROM, JOIN,  WHERE , GROUP_BY, HAVING, ORDER_BY, LIMIT, OFFSET)) {
+        for (String type : List.of( SELECT, FROM, LATERAL_VIEW, JOIN, WHERE, GROUP_BY, HAVING, ORDER_BY, LIMIT ))
+        {
             for (SparkPlanNode n : nodes) {
                 if (n.getNodeType().equals(type)) {
                     if (root == null) {
@@ -131,8 +147,8 @@ public class SparkPlanParser {
                 .replace(SINGLE_INVERTED_COMMA, "")
                 .replace(HASHTAG, "")
                 .replace("unresolvedalias(", "")
-                .replace("unspecifiedframe$()", "")
-                .replace("None),", "")
+                .replace("unspecifiedframe$(", "")
+                .replace("None", "")
                 .replaceAll("\\s+", SPACE)
                 .replaceAll("#\\d+", "")
                 .trim();
@@ -144,7 +160,6 @@ public class SparkPlanParser {
         if (start != -1 && end != -1 && end > start) {
             return replacement(line, start, end);
         }
-        line = line.replace("+-", "").trim();
         String[] parts = line.split(SPACE);
         return parts.length > 1 ? parts[1].trim() : "unknown_value";
     }
@@ -192,6 +207,7 @@ public class SparkPlanParser {
             }
         }
         if (!buf.isEmpty()) parts.add(buf.toString().trim());
+
 
         List<String> cleaned = new ArrayList<>();
         for (String p : parts) {

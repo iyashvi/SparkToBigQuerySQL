@@ -39,7 +39,7 @@ public class DfFileService {
 
         List<FileQueryResponse> responses = new ArrayList<>();
         String fileContent = readDfFile(filePath);
-        String[] queries = fileContent.split("(?=spark\\.table\\()");
+        String[] queries = fileContent.split("(?<=;)");
 
         for (String query : queries) {
             String trimmedQuery = query.trim();

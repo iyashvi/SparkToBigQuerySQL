@@ -20,13 +20,14 @@ public class SelectConverter extends PlanVisitor {
     private String havingExpr = "";
     private String orderExpr = "";
     private String limitExpr = "";
-    private String offsetExpr = "";
     private String joinTable1 = "";
     private String joinType = "";
     private String joinTable2 = "";
     private String joinAlias1 = "";
     private String joinAlias2 = "";
     private String joinOn = "";
+    private String explodeColumn = "";
+    private String explodeAlias = "";
 
     @Override
     public void visit(SparkPlanNode node) {
@@ -41,6 +42,12 @@ public class SelectConverter extends PlanVisitor {
             case FROM:
                 fromExpr = node.getExpression();
                 break;
+
+            case LATERAL_VIEW:
+                explodeColumn = node.getExpression();
+                explodeAlias  = node.getAlias1();
+                break;
+
             case JOIN:
                 joinTable1 = node.getTable1();
                 joinAlias1 = node.getAlias1();
@@ -49,7 +56,8 @@ public class SelectConverter extends PlanVisitor {
                 joinType   = node.getJoinType();
                 joinOn     = node.getJoinCondition();
                 break;
-            case WHERE:
+
+                case WHERE:
                 whereExpr = node.getExpression();
                 break;
             case GROUP_BY:
@@ -64,10 +72,8 @@ public class SelectConverter extends PlanVisitor {
             case LIMIT:
                 limitExpr = node.getExpression();
                 break;
-            case OFFSET:
-                offsetExpr = node.getExpression();
-                break;
         }
+
     }
 
     public String getQuery() {
@@ -80,6 +86,7 @@ public class SelectConverter extends PlanVisitor {
         }
         else if (!fromExpr.isEmpty()) queryBuilder.append(SELECT + "*");
 
+
         // JOIN
         if (!joinTable1.isEmpty()) {
             queryBuilder.append(SPACE).append(FROM).append(SPACE)
@@ -90,17 +97,34 @@ public class SelectConverter extends PlanVisitor {
                         .append(joinType).append(SPACE)
                         .append(joinTable2).append(safeAlias(joinAlias2))
                         .append(SPACE).append(ON).append(SPACE).append(joinOn);
+
             }
         }
-
-        // FROM
         else if (!fromExpr.isEmpty()) {
-            queryBuilder.append(SPACE + FROM + SPACE).append(fromExpr);
+            queryBuilder.append(SPACE).append(FROM).append(SPACE).append(fromExpr);
         }
 
+        // Explode -> unnest
+        if (!explodeColumn.isEmpty()) {
+            String baseAlias = "";
+            if (fromExpr.contains(" AS ")) {
+                baseAlias = fromExpr.split(" AS ")[1].trim();
+            } else {
+                baseAlias = fromExpr.trim();
+            }
+            queryBuilder.append(", UNNEST(")
+                    .append(baseAlias)
+                    .append(".")
+                    .append(explodeColumn)
+                    .append(")");
+            if (!explodeAlias.isEmpty()) {
+                queryBuilder.append(" AS ").append(explodeAlias);
+            }
+        }
         // WHERE
         if (!whereExpr.isEmpty()) {
-            queryBuilder.append(SPACE + WHERE + SPACE).append(handleSqlFunctionsAndExpression(whereExpr));
+            whereExpr = fixWhereLiterals(whereExpr);
+            queryBuilder.append(SPACE + WHERE + SPACE).append(whereExpr);
         }
 
         // GROUP BY
@@ -110,6 +134,7 @@ public class SelectConverter extends PlanVisitor {
 
         // HAVING
         if (!havingExpr.isEmpty()) {
+            havingExpr = fixWhereLiterals(havingExpr);
             queryBuilder.append(SPACE + HAVING + SPACE).append(havingExpr);
         }
 
@@ -123,11 +148,6 @@ public class SelectConverter extends PlanVisitor {
             queryBuilder.append(SPACE + LIMIT + SPACE).append(limitExpr);
         }
 
-        // OFFSET
-        if (!offsetExpr.isEmpty()) {
-            queryBuilder.append(SPACE + OFFSET + SPACE).append(offsetExpr);
-        }
-
         return queryBuilder.append(SEMI_COLON).toString().trim();
     }
 
@@ -138,22 +158,21 @@ public class SelectConverter extends PlanVisitor {
 
         Matcher m = Pattern.compile("(?i)(.*?)(AS\\s+\\w+)$").matcher(alias);
         if (m.find()) {
-            return SPACE + m.group(2).trim();
+            return " " + m.group(2).trim();
         }
 
         if (alias.toUpperCase().startsWith("AS ")) {
-            return SPACE + alias;
+            return " " + alias;
         }
 
-        return ALIAS + alias;
+        return " AS " + alias;
     }
-
 
     private String transformSelectExpr(String expr) {
 
-        expr = expr.replaceAll(",\\s*\\)", RIGHT_ROUND_BRACKET);
+        expr = expr.replaceAll(",\\s*\\)", ")")
+                .replaceAll("\\)\\)+", ")");
 
-        System.out.println(expr);
         List<String> parts = splitTopLevel(expr);
 
         List<String> cleaned = new ArrayList<>();
@@ -164,22 +183,28 @@ public class SelectConverter extends PlanVisitor {
             if (part.contains("windowspecdefinition")) {
                 part = transformWindowFunction(part);
             }
+            if (part.toLowerCase().startsWith("map_keys(")) {
+                String col = part.substring("map_keys(".length(), part.length() - 1).trim();
+                part = "ARRAY(SELECT elem.key FROM UNNEST(" + col + ") AS elem) AS keys";
+            }
 
-            part = handleSqlFunctionsAndExpression(part);
+            part = part.replaceAll("(?i)( AS \\w+?)(?:#\\d+|\\d+)\\b", "$1");
 
-            part = part.replaceAll("(?i)( AS \\w+?)(?:#\\d+|\\d+)\\b", "$1")
-                    .replaceAll("#\\d+", "");
+            part = part.replaceAll("#\\d+", "");
+
+            part = ensureAlias(part);
+
 
             cleaned.add(part);
+
+
         }
 
         return String.join(COMMA + SPACE, cleaned);
     }
 
-
     private List<String> splitTopLevel(String expr) {
 
-        expr = expr.replaceAll(",\\s*\\)", RIGHT_ROUND_BRACKET);
         List<String> result = new ArrayList<>();
 
         int depth = 0;
@@ -191,164 +216,96 @@ public class SelectConverter extends PlanVisitor {
 
             if (c == ',' && depth == 0) {
                 result.add(token.toString());
+                System.out.println(token);
                 token.setLength(0);
             } else {
                 token.append(c);
             }
         }
         if (!token.isEmpty()) result.add(token.toString());
+        System.out.println("Result: "+result);
 
         return result;
     }
 
-
-    private String handleSqlFunctionsAndExpression(String expr) {
-        if (expr == null || expr.isBlank()) return expr;
-
-        // Where conditions
-        expr = expr.replaceAll("=\\s*(?!')(?!\\d+\\b)([^'=\\s][^,;\\)]*)", "= '$1'");
-        expr = expr.replaceAll("LIKE\\s*(%?)([^%]+)(%?)", "LIKE '$1$2$3'");
-
-        // DATE functions (convert to BigQuery's format)
-        expr = expr.replaceAll("(?<=\\s)(\\d{4}-\\d{2}-\\d{2})(?=\\s*;|\\s*\\b|$)", "'$1'");
-        expr = expr.replaceAll("(?i)to_date\\(([^)]+)\\)", "DATE($1)");
-        expr = expr.replaceAll("(?i)date_add\\(([^,]+),\\s*(\\d+)\\)", "DATE_ADD($1, INTERVAL $2 DAY)");
-        expr = expr.replaceAll("(?i)date_sub\\(([^,]+),\\s*(\\d+)\\)", "DATE_SUB($1, INTERVAL $2 DAY)");
-        expr = expr.replaceAll("(?i)datediff\\(([^,]+),\\s*([^)]+)\\)", "DATE_DIFF($1, $2, DAY)");
-
-        // NOW() and similar functions
-        expr = expr.replaceAll("(?i)now\\(\\)", "CURRENT_TIMESTAMP()");
-        expr = expr.replaceAll("(?i)current_date\\(\\)", "CURRENT_DATE()");
-
-        // UPPER(), LOWER()
-        expr = expr.replaceAll("(?i)upper\\(([^)]+)\\)", "UPPER($1)");
-        expr = expr.replaceAll("(?i)lower\\(([^)]+)\\)", "LOWER($1)");
-
-        // CASE expressions
-        expr = expr.replaceAll("(?i)THEN\\s*(?!')(?!\\d+\\b)([\\w\\-\\s]+?)(?=\\s*(ELSE|WHEN|END))", "THEN '$1'");
-        expr = expr.replaceAll("(?i)ELSE\\s*(?!')(?!\\d+\\b)([\\w\\-\\s]+?)(?=\\s*(END))", "ELSE '$1'");
-
-        if (expr.contains("cast")) {
-            expr = handleCastExpression(expr);
-        }
-
-        expr = expr.replaceAll("(?i)struct\\(([^)]+)\\)", "STRUCT($1)"); // Standard CAST
-
-        // NVL expressions (IFNULL)
-        expr = expr.replaceAll("(?i)nvl\\(([^,]+),\\s*([^\\)]+)\\)", "IFNULL($1, $2)"); // NVL to IFNULL
-
-        // map_keys, map_values expressions (ARRAY(SELECT * FROM UNNEST(...)))
-        expr = expr.replaceAll("(?i)map_keys\\(([^)]+)\\)", "ARRAY(SELECT elem.key FROM UNNEST($1) AS elem) AS keys");
-        expr = expr.replaceAll("(?i)map_values\\(([^)]+)\\)", "ARRAY(SELECT elem.value FROM UNNEST($1) AS elem) AS values");
-
-        // arithmetic operations (e.g., Age + 10)
-        expr = expr.replaceAll("(?i)([a-zA-Z_]\\w*)\\s*(\\+|-|\\*|\\/|%)\\s*(\\d+)", "$1 $2 $3");
-
-        return expr;
-    }
-
-
-    private String handleCastExpression(String expr){
-
-        expr = expr.replaceAll("(?i)cast\\s*\\(\\s*([^\\s]+)\\s+as\\s+([^\\s]+)\\s*\\)", "CAST($1 AS $2)");
-        expr = expr.replaceAll("(?i)decimal\\s*\\(\\s*([^,]+)\\s*,\\s*([^\\)]+)\\s*\\)", "NUMERIC");
-
-        String regex = "(CAST\\([^)]*?AS\\s+)([a-zA-Z0-9_]+)";
-
-        Pattern pattern = Pattern.compile(regex, Pattern.CASE_INSENSITIVE);
-        Matcher matcher = pattern.matcher(expr);
-
-        StringBuilder result = new StringBuilder();
-
-        while (matcher.find()) {
-            String prefix = matcher.group(1); // e.g., "CAST(o.TotalAmount AS "
-            String typeName = matcher.group(2); // e.g., "date"
-
-            String replacement = prefix + typeName.toUpperCase();
-            matcher.appendReplacement(result, Matcher.quoteReplacement(replacement));
-        }
-        matcher.appendTail(result);
-
-        return result.toString();
-    }
-
-
     private String transformWindowFunction(String expr) {
 
-        String funcName = expr.substring(0, expr.indexOf('(')).toUpperCase().trim();
-        String restOfExpression = expr.substring(expr.indexOf('('), expr.indexOf("windowspecdefinition")).trim();
-        String func = funcName + restOfExpression;
+        String func = expr.substring(0, expr.indexOf("windowspecdefinition")).trim();
 
         int start = expr.indexOf("windowspecdefinition(") + "windowspecdefinition(".length();
         int end = expr.lastIndexOf(")");
         String spec = expr.substring(start, end).trim();
 
         spec = spec.replace("unspecifiedframe$()", "")
-                .replaceAll(",\\s*,", COMMA)
+                .replaceAll(",\\s*,", ",")
                 .replaceAll(",\\s*$", "");
 
-        // Splitting window spec into PARTITION BY and ORDER BY and FRAME parts
+        // Splitting window spec into PARTITION BY and ORDER BY parts
         List<String> args = splitTopLevel(spec);
 
         String partition = "";
         String order = "";
-        String frame = "";
 
         if (!args.isEmpty()) {
             partition = args.get(0).trim(); // first argument is ALWAYS PARTITION column
         }
         if (args.size() > 1) {
             StringBuilder o = new StringBuilder();
-            for (int i = 1; i < args.size() && !args.get(i).contains("specifiedwindowframe"); i++) {
-                if (!o.isEmpty()) o.append(COMMA + SPACE);
+            for (int i = 1; i < args.size(); i++) {
+                if (o.length() > 0) o.append(", ");
                 o.append(args.get(i).trim());
             }
             order = o.toString();
         }
 
-        if (spec.contains("RowFrame") || spec.contains("RangeFrame")) {
-
-            int frameStartIndex = spec.indexOf("specifiedwindowframe(")+ "specifiedwindowframe(".length();
-            int frameEndIndex = spec.lastIndexOf(")");
-            String cleanFrameSpec = "";
-
-            if (frameStartIndex != -1 && frameEndIndex != -1) {
-                cleanFrameSpec = spec.substring(frameStartIndex, frameEndIndex).trim();
-                cleanFrameSpec = cleanFrameSpec.replaceAll("\\$\\(\\)", ""); // Remove "$()" if it's present
-            }
-
-            if (cleanFrameSpec.contains("unboundedpreceding") && cleanFrameSpec.contains("currentrow")) {
-                String word = "";
-                if(cleanFrameSpec.contains("RangeFrame")) word = "RANGE ";
-                if(cleanFrameSpec.contains("RowFrame")) word = "ROWS ";
-                frame = word + "BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW";
-            }
-            else {
-                frame = cleanFrameSpec;
-            }
-        }
-
-        StringBuilder over = new StringBuilder(OVER + LEFT_ROUND_BRACKET);
+        StringBuilder over = new StringBuilder("OVER (");
 
         if (!partition.isEmpty()) {
-            over.append(PARTITION_BY).append(partition);
+            over.append("PARTITION BY ").append(partition);
         }
         if (!order.isEmpty()) {
-            if (!partition.isEmpty()) over.append(SPACE);
-            over.append(ORDER_BY+SPACE).append(order);
-        }
-        if (!frame.isEmpty()) {
-            if (!order.isEmpty() || !partition.isEmpty()) over.append(SPACE);
-            over.append(frame);
+            if (!partition.isEmpty()) over.append(" ");
+            over.append("ORDER BY ").append(order);
         }
 
-        over.append(RIGHT_ROUND_BRACKET);
+        over.append(")");
 
         String alias = "";
         Matcher m = Pattern.compile("(?i)AS\\s+(\\w+)").matcher(expr);
-        if (m.find()) alias = ALIAS + m.group(1);
-        return func + SPACE + over + alias;
+        if (m.find()) alias = " AS " + m.group(1);
+        return func + " " + over + alias;
 
+    }
+    private String fixWhereLiterals(String expr) {
+        if (expr == null || expr.isBlank()) return expr;
+
+        expr = expr.replaceAll("(=)\\s*([A-Za-z_][A-Za-z0-9_]*(?:\\s+[A-Za-z0-9_]+)+)", "$1 '$2'");
+
+        expr = expr.replaceAll("(=)\\s*(?!')(?!\\d+\\b)([A-Za-z_][A-Za-z0-9_]*)", "$1 '$2'");
+
+        return expr;
+    }
+
+    private String ensureAlias(String expr) {
+        return expr;
+    }
+
+    public void reset() {
+        this.queryBuilder.setLength(0);
+        this.selectExpr = "";
+        this.fromExpr = "";
+        this.whereExpr = "";
+        this.groupExpr = "";
+        this.havingExpr = "";
+        this.orderExpr = "";
+        this.limitExpr = "";
+        this.joinType = "";
+        this.joinOn = "";
+        this.joinTable1 = "";
+        this.joinTable2 = "";
+        this.joinAlias1 = "";
+        this.joinAlias2 = "";
     }
 
 }
+

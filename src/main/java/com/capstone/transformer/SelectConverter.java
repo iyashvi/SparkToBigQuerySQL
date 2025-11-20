@@ -278,9 +278,14 @@ public class SelectConverter extends PlanVisitor {
     }
     private String fixWhereLiterals(String expr) {
         if (expr == null || expr.isBlank()) return expr;
-        return expr.replaceAll("=\\s*(?!')(?!\\d+\\b)(\\w+)", "= '$1'");
 
+        expr = expr.replaceAll("(=)\\s*([A-Za-z_][A-Za-z0-9_]*(?:\\s+[A-Za-z0-9_]+)+)", "$1 '$2'");
+
+        expr = expr.replaceAll("(=)\\s*(?!')(?!\\d+\\b)([A-Za-z_][A-Za-z0-9_]*)", "$1 '$2'");
+
+        return expr;
     }
+
     private String ensureAlias(String expr) {
         return expr;
     }
@@ -301,8 +306,6 @@ public class SelectConverter extends PlanVisitor {
         this.joinAlias1 = "";
         this.joinAlias2 = "";
     }
-
-
 
 }
 

@@ -83,6 +83,7 @@ public class SelectConverter extends PlanVisitor {
         if (!selectExpr.isEmpty()) {
             queryBuilder.append(SELECT + SPACE)
                     .append(transformSelectExpr(selectExpr));
+            System.out.println("SELECT: " + queryBuilder.toString());
         }
         else if (!fromExpr.isEmpty()) queryBuilder.append(SELECT + "*");
 
@@ -106,15 +107,7 @@ public class SelectConverter extends PlanVisitor {
 
         // EXPLODE -> UNNEST
         if (!explodeColumn.isEmpty()) {
-            String baseAlias = "";
-            if (fromExpr.contains(ALIAS)) {
-                baseAlias = fromExpr.split(ALIAS)[1].trim();
-            } else {
-                baseAlias = fromExpr.trim();
-            }
             queryBuilder.append(", UNNEST(")
-                    .append(baseAlias)
-                    .append(".")
                     .append(explodeColumn)
                     .append(")");
             if (!explodeAlias.isEmpty()) {
@@ -171,7 +164,6 @@ public class SelectConverter extends PlanVisitor {
 
         expr = expr.replaceAll(",\\s*\\)", RIGHT_ROUND_BRACKET);
 
-        System.out.println(expr);
         List<String> parts = splitTopLevel(expr);
 
         List<String> cleaned = new ArrayList<>();

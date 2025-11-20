@@ -1,6 +1,6 @@
 spark.table('Employees').alias('e').join(spark.table('Department').alias('d'), 'EmployeeID','right').select('e.Name', 'e.Age', 'd.Dept');
 
-"spark.table('Employees').join(spark.table('Department'), 'EmployeeID').select('Name', 'Age', 'Dept');"
+"spark.table('Employees').join(spark.table('Department'), 'EmployeeID').select('Name', 'Age', 'Department.Dept');"
 
 spark.table('Employees').alias(e).groupBy('age').agg('sum(age)').having('sum(age)' > 10000);
 

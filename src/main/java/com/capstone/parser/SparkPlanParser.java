@@ -49,23 +49,15 @@ public class SparkPlanParser {
                 pendingAlias = null;
             }
 
-            else if (line.contains("Generate") && line.contains("explode")) {
-                String col = "";
-                int s = line.indexOf("explode(");
-                if (s != -1) {
-                    s += "explode(".length();
-                    int e = line.indexOf(")", s);
-                    col = line.substring(s, e).replace("'", "").trim();   // skills or e.skills
-                }
+            // EXPLODE
+            else if (line.contains("Generate") && line.toLowerCase().contains("explode")) {
 
-                String alias = "";
-                if (line.contains("[")) {
-                    int s2 = line.indexOf("[") + 1;
-                    int e2 = line.indexOf("]", s2);
-                    alias = line.substring(s2, e2).replace("'", "").trim();  // ex
-                }
-                node = new SparkPlanNode("LATERAL_VIEW", col);
+                String col = extractCondition(line);
+                String alias = extractValue(line);
+
+                node = new SparkPlanNode(LATERAL_VIEW, col);
                 node.setAlias1(alias);  // store explode alias (ex)
+
                 nodes.add(node);
                 continue;
             }

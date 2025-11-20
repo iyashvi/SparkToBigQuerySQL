@@ -285,6 +285,24 @@ public class SelectConverter extends PlanVisitor {
         return expr;
     }
 
+    public void reset() {
+        this.queryBuilder.setLength(0);
+        this.selectExpr = "";
+        this.fromExpr = "";
+        this.whereExpr = "";
+        this.groupExpr = "";
+        this.havingExpr = "";
+        this.orderExpr = "";
+        this.limitExpr = "";
+        this.joinType = "";
+        this.joinOn = "";
+        this.joinTable1 = "";
+        this.joinTable2 = "";
+        this.joinAlias1 = "";
+        this.joinAlias2 = "";
+    }
+
+
 
 }
 

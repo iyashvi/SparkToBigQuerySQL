@@ -94,6 +94,7 @@ public class DataFrameService {
         String havingCond = null;
         String orderBy = null;
         String limit = null;
+        String offset = null;
 
 
         // BASE TABLE
@@ -160,6 +161,10 @@ public class DataFrameService {
         Matcher lim = Pattern.compile("limit\\((.*?)\\)").matcher(code);
         if (lim.find()) limit = lim.group(1).trim();
 
+      //      OFFSET
+        Matcher off = Pattern.compile("offset\\((.*?)\\)").matcher(code);
+          if (off.find()) offset = off.group(1).trim();
+
 
         // BUILD SQL
         StringBuilder sql = new StringBuilder("SELECT ");
@@ -196,8 +201,10 @@ public class DataFrameService {
         // ORDER BY
         if (orderBy != null) sql.append(" ORDER BY ").append(orderBy);
 
-        // LIMIT
+ //LIMIT + OFFSET
         if (limit != null) sql.append(" LIMIT ").append(limit);
+        if (offset != null) sql.append(" OFFSET ").append(offset);
+
 
         sql.append(";");
         return sql.toString();

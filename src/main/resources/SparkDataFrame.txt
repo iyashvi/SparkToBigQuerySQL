@@ -4,6 +4,8 @@ spark.table('Employees').alias('e').join(spark.table('Department').alias('d'), '
 
 spark.table('Employees').alias(e).groupBy('age').agg('sum(age)').having('sum(age)' > 10000);
 
+spark.table('Employees').orderBy('age').desc()).limit(10).offset(5);
+
 spark.table('Employees').groupBy('age').agg('AVG(age) as avg_age');
 
 spark.table('Employees').select('name', 'age').orderBy('age DESC').limit(5);

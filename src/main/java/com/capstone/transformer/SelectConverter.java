@@ -54,6 +54,13 @@ public class SelectConverter extends PlanVisitor {
                 joinAlias2 = node.getAlias2();
                 joinType   = node.getJoinType();
                 joinOn     = node.getJoinCondition();
+
+                JoinInfo j = new JoinInfo();
+                j.table = joinTable2;
+                j.alias = joinAlias2;
+                j.joinType = joinType;
+                j.joinCondition = joinOn;
+                joinList.add(j);
                 break;
             case WHERE:
                 whereExpr = node.getExpression();
@@ -89,21 +96,47 @@ public class SelectConverter extends PlanVisitor {
 
         // JOIN
         if (!joinTable1.isEmpty()) {
-            queryBuilder.append(SPACE).append(FROM).append(SPACE)
+            queryBuilder.append(" ").append(FROM).append(" ")
                     .append(joinTable1).append(safeAlias(joinAlias1));
 
             if (!joinTable2.isEmpty()) {
-                queryBuilder.append(SPACE)
-                        .append(joinType).append(SPACE)
+                queryBuilder.append(" ")
+                        .append(joinType).append(" ")
                         .append(joinTable2).append(safeAlias(joinAlias2))
-                        .append(SPACE).append(ON).append(SPACE).append(joinOn);
+                        .append(" ").append(ON).append(" ").append(joinOn);
             }
         }
-
         // FROM
         else if (!fromExpr.isEmpty()) {
             queryBuilder.append(SPACE + FROM + SPACE).append(fromExpr);
         }
+
+        if (!joinList.isEmpty()) {
+
+            int start = joinTable2.isEmpty() ? 0 : 1;  // FIX duplicate JOIN
+
+            for (int i = start; i < joinList.size(); i++) {
+                JoinInfo ji = joinList.get(i);
+
+                String cleanOn = ji.joinCondition;
+                if (cleanOn == null) cleanOn = "";
+
+                cleanOn = cleanOn
+                        .replace("]", ")")
+                        .replace("[", "(")
+                        .replace(":-.", "")
+                        .replace(":-", "")
+                        .replaceAll("#\\d+", "")
+                        .replaceAll("=\\s*:", "=")
+                        .trim();
+
+                queryBuilder.append(" ")
+                        .append(ji.joinType).append(" ")
+                        .append(ji.table).append(safeAlias(ji.alias))
+                        .append(" ").append(ON).append(" ").append(cleanOn);
+            }
+        }
+
 
         // EXPLODE -> UNNEST
         if (!explodeColumn.isEmpty()) {
@@ -149,16 +182,30 @@ public class SelectConverter extends PlanVisitor {
     }
 
     private String safeAlias(String alias) {
-        if (alias == null || alias.isBlank()) return "";
+        if (alias == null) return "";
 
+        alias = alias.trim();
+
+        // FIX 1: Remove all garbage aliases like ":-", "<>", "$anon"
+        if (alias.equals(":-") || alias.equals("<>") || alias.matches(".*anon.*")) {
+            return "";
+        }
+
+        // FIX 2: Remove Spark suffixes like col#12
         alias = alias.replaceAll("#\\d+", "").trim();
-        Matcher m = Pattern.compile("(?i)(.*?)(AS\\s+\\w+)$").matcher(alias);
 
-        if (m.find()) return " " + m.group(2).trim();
-        if (alias.toUpperCase().startsWith("AS ")) return " " + alias;
+        // FIX 3: If alias is empty after cleanup → no alias
+        if (alias.isEmpty()) return "";
 
-        return ALIAS + alias;
+        // FIX 4: If alias already starts with AS → return it
+        if (alias.toUpperCase().startsWith("AS ")) {
+            return " " + alias;
+        }
+
+        // FIX 5: Normal alias
+        return " AS " + alias;
     }
+
 
     private String transformSelectExpr(String expr) {
 
@@ -247,16 +294,28 @@ public class SelectConverter extends PlanVisitor {
         // NVL expressions (IFNULL)
         expr = expr.replaceAll("(?i)nvl\\(([^,]+),\\s*([^\\)]+)\\)", "IFNULL($1, $2)"); // NVL to IFNULL
 
-        // map_keys, map_values expressions (ARRAY(SELECT * FROM UNNEST(...)))
-        expr = expr.replaceAll("(?i)map_keys\\(([^)]+)\\)", "ARRAY(SELECT elem.key FROM UNNEST($1) AS elem) AS keys");
-        expr = expr.replaceAll("(?i)map_values\\(([^)]+)\\)", "ARRAY(SELECT elem.value FROM UNNEST($1) AS elem) AS values");
+
+        // MAP_KEYS(expr)
+        expr = expr.replaceAll(
+                "(?i)map_keys\\(([^)]+)\\)",
+                "(SELECT ARRAY_AGG(elem.key) FROM UNNEST($1) AS elem)"
+        );
+
+        // MAP_VALUES(expr)
+        expr = expr.replaceAll(
+                "(?i)map_values\\(([^)]+)\\)",
+                "(SELECT ARRAY_AGG(CAST(elem.value AS STRING)) FROM UNNEST($1) AS elem)"
+        );
+
+        expr = expr.replaceAll("(?i)array\\s*\\(", "[");
+        expr = expr.replaceAll("\\)$", "]");
+
 
         // arithmetic operations (e.g., Age + 10)
         expr = expr.replaceAll("(?i)([a-zA-Z_]\\w*)\\s*(\\+|-|\\*|\\/|%)\\s*(\\d+)", "$1 $2 $3");
 
         return expr;
     }
-
 
     private String handleCastExpression(String expr){
 
@@ -281,7 +340,6 @@ public class SelectConverter extends PlanVisitor {
 
         return result.toString();
     }
-
 
     private String transformWindowFunction(String expr) {
 
@@ -388,6 +446,15 @@ public class SelectConverter extends PlanVisitor {
         if (m.find()) alias = ALIAS + m.group(1);
         return func + SPACE + over + alias;
 
+    }
+
+    private final List<JoinInfo> joinList = new ArrayList<>();
+
+    class JoinInfo {
+        String table;
+        String alias;
+        String joinType;
+        String joinCondition;
     }
 
 }

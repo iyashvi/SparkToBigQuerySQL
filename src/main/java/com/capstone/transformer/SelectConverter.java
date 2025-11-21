@@ -90,7 +90,6 @@ public class SelectConverter extends PlanVisitor {
         if (!selectExpr.isEmpty()) {
             queryBuilder.append(SELECT + SPACE)
                     .append(transformSelectExpr(selectExpr));
-            System.out.println("SELECT: " + queryBuilder.toString());
         }
         else if (!fromExpr.isEmpty()) queryBuilder.append(SELECT + "*");
 
@@ -343,6 +342,7 @@ public class SelectConverter extends PlanVisitor {
 
     private String transformWindowFunction(String expr) {
 
+        System.out.println("Expr: " + expr);
         String funcName = expr.substring(0, expr.indexOf('(')).toUpperCase().trim();
         String restOfExpression = expr.substring(expr.indexOf('('), expr.indexOf("windowspecdefinition")).trim();
         String func = funcName + restOfExpression;
@@ -355,74 +355,45 @@ public class SelectConverter extends PlanVisitor {
                 .replaceAll(",\\s*,", COMMA)
                 .replaceAll(",\\s*$", "");
 
+        System.out.println("Spec: " + spec);
+
         // Splitting window spec into PARTITION BY and ORDER BY and FRAME parts
         List<String> args = splitTopLevel(spec);
+
+        for(String a : args) {
+            System.out.print("Args: " + a.trim() + ", ");
+        }
+        System.out.println();
 
         String partition = "";
         String order = "";
         String frame = "";
 
         if (!args.isEmpty()) {
-            partition = args.get(0).trim(); // first argument is ALWAYS PARTITION column
-        }
-        if (args.size() > 1) {
+
+            String firstArg = args.get(0).trim();
+            boolean isOrderArg = firstArg.contains("ASC") || firstArg.contains("DESC") || firstArg.contains("NULLS");
+
+            if (!isOrderArg) {
+                partition = firstArg;
+            } else {
+                order = firstArg;
+            }
+
             StringBuilder o = new StringBuilder();
-            for (int i = 1; i < args.size() && !args.get(i).contains("specifiedwindowframe"); i++) {
-                if (!o.isEmpty()) o.append(COMMA + SPACE);
-                o.append(args.get(i).trim());
+
+            for (int i = 1; i < args.size(); i++) {
+                String arg = args.get(i).trim();
+
+                if (arg.contains("specifiedwindowframe")) {
+                    frame = windowFrame(arg);
+                    break;
+                } else {
+                    if (!o.isEmpty()) o.append(COMMA + SPACE);
+                    o.append(arg);
+                    order = o.toString();
+                }
             }
-            order = o.toString();
-        }
-
-        if (spec.contains("RowFrame") || spec.contains("RangeFrame")) {
-
-            int frameStartIndex = spec.indexOf("specifiedwindowframe(")+ "specifiedwindowframe(".length();
-            int frameEndIndex = spec.lastIndexOf(")");
-            String cleanFrameSpec = "";
-
-            if (frameStartIndex != -1 && frameEndIndex != -1) {
-                cleanFrameSpec = spec.substring(frameStartIndex, frameEndIndex).trim();
-                cleanFrameSpec = cleanFrameSpec.replaceAll("\\$\\(\\)", ""); // Remove "$()" if it's present
-            }
-            // ROWS BETWEEN <start_boundary> AND <end_boundary>
-            // RowFrame, unboundedpreceding, currentrow
-            // RowFrame, -2, currentrow
-
-            String frameWord = "";
-            String startBoundry = "";
-            String endBoundry = "";
-
-            List<String> elements = splitTopLevel(cleanFrameSpec);
-
-            if (!elements.isEmpty()) {
-                String firstPart = elements.get(0).trim();
-                if(firstPart.equals("RangeFrame")) frameWord = "RANGE";
-                if(firstPart.equals("RowFrame")) frameWord = "ROWS";
-
-                String secondPart = elements.get(1).trim();
-                String thirdPart = elements.get(2).trim();
-
-                if(secondPart.contains("-")){ // PRECEDING
-                    startBoundry = secondPart.replace("-", "") + " PRECEDING";
-                }
-                else if(secondPart.contains("unboundedpreceding")){
-                    startBoundry = "UNBOUNDED PRECEDING";
-                }
-                else startBoundry = secondPart + " FOLLOWING";
-
-                if(thirdPart.contains("-")){ // PRECEDING
-                    endBoundry = thirdPart.replace("-", "") + " PRECEDING";
-                }
-                else if(thirdPart.contains("currentrow")){
-                    endBoundry = "CURRENT ROW";
-                }
-                else if(thirdPart.contains("unboundedfollowing")){
-                    endBoundry = "UNBOUNDED FOLLOWING";
-                }
-                else endBoundry = thirdPart + " FOLLOWING";
-            }
-
-            frame = frameWord + " BETWEEN " + startBoundry + " AND " + endBoundry;
         }
 
         StringBuilder over = new StringBuilder(OVER + LEFT_ROUND_BRACKET);
@@ -446,6 +417,42 @@ public class SelectConverter extends PlanVisitor {
         if (m.find()) alias = ALIAS + m.group(1);
         return func + SPACE + over + alias;
 
+    }
+
+    private String windowFrame(String spec) {
+        int frameStartIndex = spec.indexOf("specifiedwindowframe(") + "specifiedwindowframe(".length();
+        int frameEndIndex = spec.lastIndexOf(")");
+
+        if (frameStartIndex == -1 || frameEndIndex == -1) return "";
+
+        String cleanFrameSpec = spec.substring(frameStartIndex, frameEndIndex).trim();
+        cleanFrameSpec = cleanFrameSpec.replaceAll("\\$\\(\\)", ""); // Removing "$()" if present
+
+        List<String> elements = splitTopLevel(cleanFrameSpec);
+
+        if (elements.isEmpty()) return "";
+
+        String frameType = elements.get(0).trim().equals("RowFrame") ? "ROWS" : "RANGE";
+
+        // Processing start and end boundaries
+        String startBoundary = processBoundary(elements.get(1).trim());
+        String endBoundary = processBoundary(elements.get(2).trim());
+
+        return frameType + " BETWEEN " + startBoundary + " AND " + endBoundary;
+    }
+
+    private String processBoundary(String boundary) {
+        if (boundary.contains("-")) {
+            return boundary.replace("-", "") + " PRECEDING";
+        } else if (boundary.contains("unboundedpreceding")) {
+            return "UNBOUNDED PRECEDING";
+        } else if (boundary.contains("unboundedfollowing")) {
+            return "UNBOUNDED FOLLOWING";
+        } else if (boundary.contains("currentrow")) {
+            return "CURRENT ROW";
+        } else {
+            return boundary + " FOLLOWING";
+        }
     }
 
     private final List<JoinInfo> joinList = new ArrayList<>();

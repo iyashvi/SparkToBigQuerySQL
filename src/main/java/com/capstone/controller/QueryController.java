@@ -36,6 +36,7 @@ public class QueryController {
         this.dfFileService = dfFileService;
     }
 
+    // Spark SQL to BigQuery
     @PostMapping("/query")
     public ResponseEntity<FileQueryResponse> translateQuery(@RequestBody QueryRequest request) throws Exception {
         String query = request.getSparkSql();
@@ -44,6 +45,7 @@ public class QueryController {
         return ResponseEntity.ok(resp);
     }
 
+    // SQL File
     @PostMapping("/sqlFile")
     public ResponseEntity<List<FileQueryResponse>> translateSqlFile(@RequestParam("file") MultipartFile file) throws Exception {
         if (file == null || file.isEmpty()) {
@@ -61,12 +63,14 @@ public class QueryController {
         }
     }
 
+    // Spark DF to BigQuery
     @PostMapping("/dataframe")
     public ResponseEntity<FileQueryResponse> convert(@RequestBody DataFrameRequest req) {
         FileQueryResponse response = dataFrameService.evaluateDataFrame(req.getDataframeCode());
         return ResponseEntity.ok(response);
     }
 
+    // DFCode File
     @PostMapping("/dfFile")
     public ResponseEntity<List<FileQueryResponse>> translateDfFile(@RequestParam("file") MultipartFile file) throws Exception {
         if (file == null || file.isEmpty()) {

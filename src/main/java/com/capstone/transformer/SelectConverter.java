@@ -276,6 +276,7 @@ public class SelectConverter extends PlanVisitor {
         expr = expr.replaceAll("(?i)now\\(\\)", "CURRENT_TIMESTAMP()");
         expr = expr.replaceAll("(?i)current_date\\(\\)", "CURRENT_DATE()");
 
+
         // UPPER(), LOWER()
         expr = expr.replaceAll("(?i)upper\\(([^)]+)\\)", "UPPER($1)");
         expr = expr.replaceAll("(?i)lower\\(([^)]+)\\)", "LOWER($1)");
@@ -312,6 +313,42 @@ public class SelectConverter extends PlanVisitor {
 
         // arithmetic operations (e.g., Age + 10)
         expr = expr.replaceAll("(?i)([a-zA-Z_]\\w*)\\s*(\\+|-|\\*|\\/|%)\\s*(\\d+)", "$1 $2 $3");
+
+
+        // Convert Spark UUID() → BigQuery GENERATE_UUID()
+        expr = expr.replaceAll("(?i)uuid\\s*\\(\\s*\\)", "GENERATE_UUID()");
+
+
+        // Spark MONTHS_BEWEEN(a, b) → BigQuery DATE_DIFF(a, DATE(b), MONTH)
+        expr = expr.replaceAll(
+                "(?i)months_between\\s*\\(\\s*([^,]+)\\s*,\\s*([^)]+)\\)",
+                "DATE_DIFF($1, DATE($2), MONTH)"
+        );
+        ;
+
+        // Spark LENGTH(ENCODE(x, UTF-8)) → BigQuery BYTE_LENGTH(x)
+        expr = expr.replaceAll(
+                "(?i)length\\s*\\(\\s*encode\\s*\\(\\s*([^,]+)\\s*,\\s*['\"]?utf\\s*-?\\s*8['\"]?\\s*\\)\\s*\\)",
+                "BYTE_LENGTH($1)"
+        );
+
+        // YEAR(x) → EXTRACT(YEAR FROM x)
+        expr = expr.replaceAll(
+                "(?i)year\\s*\\(\\s*([^\\)]+)\\s*\\)",
+                "EXTRACT(YEAR FROM $1)"
+        );
+
+        // DATE_FORMAT(date, format) → FORMAT_DATE('%B', DATE(date))
+        expr = expr.replaceAll(
+                "(?i)date_format\\s*\\(\\s*([^,]+)\\s*,\\s*['\"]?MMMM['\"]?\\s*\\)",
+                "FORMAT_DATE('%B', DATE($1))"
+        );
+
+        // FROM_UTC_TIMESTAMP(ts, UTC) → TIMESTAMP_TRUNC(ts, SECOND)
+        expr = expr.replaceAll(
+                "(?i)from_utc_timestamp\\s*\\(\\s*([^,]+)\\s*,\\s*['\"]?UTC['\"]?\\s*\\)",
+                "TIMESTAMP_TRUNC($1, SECOND)"
+        );
 
         return expr;
     }

@@ -57,5 +57,16 @@ public class TableCreation {
                         "ARRAY('Monitor', 'Desk Lamp') AS Items, " +
                         "MAP('ProductID', 104, 'Quantity', 1, 'Price', 300.0) AS OrderDetails"
         );
+
+        spark.conf().set("spark.sql.debug.maxToStringFields", "10000");
+        spark.sql(
+                "CREATE OR REPLACE TEMP VIEW Product AS " +
+                        "SELECT 101 AS ProductID, 'ProWidget' AS Name, DATE('2021-06-15') AS CreationDate, " +
+                        "10 AS CategoryID, 200 AS SupplierID, 49.99 AS Price UNION ALL " +
+                        "SELECT 102 AS ProductID, 'ProGadget' AS Name, DATE('2022-01-10') AS CreationDate, " +
+                        "11 AS CategoryID, 201 AS SupplierID, 79.50 AS Price UNION ALL " +
+                        "SELECT 103 AS ProductID, 'ToolMax' AS Name, DATE('2023-03-20') AS CreationDate, " +
+                        "10 AS CategoryID, 202 AS SupplierID, 35.00 AS Price"
+        );
     }
 }

@@ -285,15 +285,10 @@ public class SelectConverter extends PlanVisitor {
         expr = expr.replaceAll("(?i)THEN\\s*(?!')(?!\\d+\\b)([\\w\\-\\s]+?)(?=\\s*(ELSE|WHEN|END))", "THEN '$1'");
         expr = expr.replaceAll("(?i)ELSE\\s*(?!')(?!\\d+\\b)([\\w\\-\\s]+?)(?=\\s*(END))", "ELSE '$1'");
 
-        if (expr.contains("cast")) {
-            expr = handleCastExpression(expr);
-        }
-
         expr = expr.replaceAll("(?i)struct\\(([^)]+)\\)", "STRUCT($1)"); // Standard CAST
 
         // NVL expressions (IFNULL)
         expr = expr.replaceAll("(?i)nvl\\(([^,]+),\\s*([^\\)]+)\\)", "IFNULL($1, $2)"); // NVL to IFNULL
-
 
         // MAP_KEYS(expr)
         expr = expr.replaceAll(
@@ -309,7 +304,6 @@ public class SelectConverter extends PlanVisitor {
 
         expr = expr.replaceAll("(?i)array\\s*\\(", "[");
         expr = expr.replaceAll("\\)$", "]");
-
 
         // arithmetic operations (e.g., Age + 10)
         expr = expr.replaceAll("(?i)([a-zA-Z_]\\w*)\\s*(\\+|-|\\*|\\/|%)\\s*(\\d+)", "$1 $2 $3");
@@ -349,6 +343,21 @@ public class SelectConverter extends PlanVisitor {
                 "(?i)from_utc_timestamp\\s*\\(\\s*([^,]+)\\s*,\\s*['\"]?UTC['\"]?\\s*\\)",
                 "TIMESTAMP_TRUNC($1, SECOND)"
         );
+        expr = expr.replaceAll(
+                "(?i)substring\\(([^,]+),\\s*\\(?\\s*length\\(\\1\\)\\s*-\\s*\\d+\\s*\\)?\\s*,\\s*(\\d+)\\)",
+                "SUBSTR($1, -$2)" // SUBSTRING($1, LENGTH($1) - N, M) -> SUBSTR($1, -M)
+        );
+        expr = expr.replaceAll("(?i)substring\\(([^,]+),\\s*(\\d+),\\s*(\\d+)\\)", "SUBSTR($1, $2, $3)"); // SUBSTRING -> SUBSTR
+        expr = expr.replaceAll("(?i)instr\\(([^,]+),\\s*([^)]+)\\)", "STRPOS($1, $2)"); // INSTR -> STRPOS
+
+        expr = expr.replaceAll("(?i)power\\(([^,]+),\\s*([^)]+)\\)", "POW($1, $2)"); // POWER -> POW
+        expr = expr.replaceAll("(?i)stddev\\(([^)]+)\\)", "STDDEV_SAMP($1)"); // STDDEV -> STDDEV_SAMP
+
+        expr = expr.replaceAll("(?i)hash\\(([^)]+)\\)", "FARM_FINGERPRINT(CONCAT($1))"); // HASH($1) -> FARM_FINGERPRINT(CONCAT($1))
+
+        if (expr.contains("cast")) {
+            expr = handleCastExpression(expr);
+        }
 
         return expr;
     }

@@ -34,7 +34,7 @@ public class SparkPlanParser {
 
             // FROM
             else if (line.contains("'UnresolvedRelation")) {
-                String table = extractValue(line).trim();
+                String table = BACK_TICK + extractValue(line).trim() + BACK_TICK;
 
                 if (lastJoin != null) {
                     // This table belongs to the JOIN

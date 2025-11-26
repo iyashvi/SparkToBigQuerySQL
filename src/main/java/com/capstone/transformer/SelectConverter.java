@@ -1,5 +1,6 @@
 package com.capstone.transformer;
 
+import com.capstone.dto.AnalysisResponse;
 import com.capstone.model.SparkPlanNode;
 import com.capstone.parser.PlanVisitor;
 import static com.capstone.constants.Constants.*;
@@ -105,6 +106,7 @@ public class SelectConverter extends PlanVisitor {
                         .append(" ").append(ON).append(" ").append(joinOn);
             }
         }
+
         // FROM
         else if (!fromExpr.isEmpty()) {
             queryBuilder.append(SPACE + FROM + SPACE).append(fromExpr);
@@ -149,7 +151,8 @@ public class SelectConverter extends PlanVisitor {
 
         // WHERE
         if (!whereExpr.isEmpty()) {
-            queryBuilder.append(SPACE + WHERE + SPACE).append(handleSqlFunctionsAndExpression(whereExpr));
+            whereExpr = handleSqlFunctionsAndExpression(whereExpr);
+            queryBuilder.append(SPACE + WHERE + SPACE).append(whereExpr);
         }
 
         // GROUP BY
@@ -270,24 +273,34 @@ public class SelectConverter extends PlanVisitor {
         expr = expr.replaceAll("(?i)to_date\\(([^)]+)\\)", "DATE($1)");
         expr = expr.replaceAll("(?i)date_add\\(([^,]+),\\s*(\\d+)\\)", "DATE_ADD($1, INTERVAL $2 DAY)");
         expr = expr.replaceAll("(?i)date_sub\\(([^,]+),\\s*(\\d+)\\)", "DATE_SUB($1, INTERVAL $2 DAY)");
-        expr = expr.replaceAll("(?i)datediff\\(([^,]+),\\s*([^)]+)\\)", "DATE_DIFF($1, $2, DAY)");
+        expr = expr.replaceAll(
+                "(?i)datediff\\(\\s*([^,()]+(?:\\([^()]*\\))?)\\s*,\\s*([^()]+(?:\\([^()]*\\))?)\\s*\\)",
+                "DATE_DIFF($1, $2, DAY)"
+        );
 
         // NOW() and similar functions
         expr = expr.replaceAll("(?i)now\\(\\)", "CURRENT_TIMESTAMP()");
         expr = expr.replaceAll("(?i)current_date\\(\\)", "CURRENT_DATE()");
 
 
-        // UPPER(), LOWER()
+        // UPPER(), LOWER(), DISTINCT
         expr = expr.replaceAll("(?i)upper\\(([^)]+)\\)", "UPPER($1)");
         expr = expr.replaceAll("(?i)lower\\(([^)]+)\\)", "LOWER($1)");
+        expr = expr.replaceAll("(?i)\\bdistinct\\b", "DISTINCT");
 
         // CASE expressions
         expr = expr.replaceAll("(?i)THEN\\s*(?!')(?!\\d+\\b)([\\w\\-\\s]+?)(?=\\s*(ELSE|WHEN|END))", "THEN '$1'");
         expr = expr.replaceAll("(?i)ELSE\\s*(?!')(?!\\d+\\b)([\\w\\-\\s]+?)(?=\\s*(END))", "ELSE '$1'");
 
         expr = expr.replaceAll("(?i)struct\\(([^)]+)\\)", "STRUCT($1)"); // Standard CAST
+        expr = expr.replaceAll("(?i)array\\s*\\((.*?)\\)", "[$1]");
 
         // NVL expressions (IFNULL)
+        expr = expr.replaceAll(
+                "(?i)(nvl|coalesce|ifnull)\\s*\\(\\s*([^,]+?)\\s*,\\s*(?!'|\\s*\\d+(?:\\.\\d+)?\\b)([^,')]+(?:\\s+[^,')]+)*)\\s*\\)",
+                "$1($2, '$3')"
+        );
+        System.out.println("Line 1: " + expr);
         expr = expr.replaceAll("(?i)nvl\\(([^,]+),\\s*([^\\)]+)\\)", "IFNULL($1, $2)"); // NVL to IFNULL
 
         // MAP_KEYS(expr)
@@ -302,9 +315,6 @@ public class SelectConverter extends PlanVisitor {
                 "(SELECT ARRAY_AGG(CAST(elem.value AS STRING)) FROM UNNEST($1) AS elem)"
         );
 
-        expr = expr.replaceAll("(?i)array\\s*\\(", "[");
-        expr = expr.replaceAll("\\)$", "]");
-
         // arithmetic operations (e.g., Age + 10)
         expr = expr.replaceAll("(?i)([a-zA-Z_]\\w*)\\s*(\\+|-|\\*|\\/|%)\\s*(\\d+)", "$1 $2 $3");
 
@@ -312,13 +322,11 @@ public class SelectConverter extends PlanVisitor {
         // Convert Spark UUID() → BigQuery GENERATE_UUID()
         expr = expr.replaceAll("(?i)uuid\\s*\\(\\s*\\)", "GENERATE_UUID()");
 
-
         // Spark MONTHS_BEWEEN(a, b) → BigQuery DATE_DIFF(a, DATE(b), MONTH)
         expr = expr.replaceAll(
                 "(?i)months_between\\s*\\(\\s*([^,]+)\\s*,\\s*([^)]+)\\)",
                 "DATE_DIFF($1, DATE($2), MONTH)"
         );
-        ;
 
         // Spark LENGTH(ENCODE(x, UTF-8)) → BigQuery BYTE_LENGTH(x)
         expr = expr.replaceAll(
@@ -343,6 +351,7 @@ public class SelectConverter extends PlanVisitor {
                 "(?i)from_utc_timestamp\\s*\\(\\s*([^,]+)\\s*,\\s*['\"]?UTC['\"]?\\s*\\)",
                 "TIMESTAMP_TRUNC($1, SECOND)"
         );
+
         expr = expr.replaceAll(
                 "(?i)substring\\(([^,]+),\\s*\\(?\\s*length\\(\\1\\)\\s*-\\s*\\d+\\s*\\)?\\s*,\\s*(\\d+)\\)",
                 "SUBSTR($1, -$2)" // SUBSTRING($1, LENGTH($1) - N, M) -> SUBSTR($1, -M)
@@ -364,7 +373,10 @@ public class SelectConverter extends PlanVisitor {
 
     private String handleCastExpression(String expr){
 
-        expr = expr.replaceAll("(?i)cast\\s*\\(\\s*([^\\s]+)\\s+as\\s+([^\\s]+)\\s*\\)", "CAST($1 AS $2)");
+        expr = expr.replaceAll(
+                "(?i)cast\\s*\\(\\s*([^\\)]+?)\\s+as\\s+([^\\)]+?)\\s*\\)",
+                "CAST($1 AS $2)"
+        );
         expr = expr.replaceAll("(?i)decimal\\s*\\(\\s*([^,]+)\\s*,\\s*([^\\)]+)\\s*\\)", "NUMERIC");
 
         String regex = "(CAST\\([^)]*?AS\\s+)([a-zA-Z0-9_]+)";

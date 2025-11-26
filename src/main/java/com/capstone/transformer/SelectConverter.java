@@ -54,13 +54,6 @@ public class SelectConverter extends PlanVisitor {
                 joinAlias2 = node.getAlias2();
                 joinType   = node.getJoinType();
                 joinOn     = node.getJoinCondition();
-
-                JoinInfo j = new JoinInfo();
-                j.table = joinTable2;
-                j.alias = joinAlias2;
-                j.joinType = joinType;
-                j.joinCondition = joinOn;
-                joinList.add(j);
                 break;
             case WHERE:
                 whereExpr = node.getExpression();
@@ -110,33 +103,6 @@ public class SelectConverter extends PlanVisitor {
             queryBuilder.append(SPACE + FROM + SPACE).append(fromExpr);
         }
 
-        if (!joinList.isEmpty()) {
-
-            int start = joinTable2.isEmpty() ? 0 : 1;  // FIX duplicate JOIN
-
-            for (int i = start; i < joinList.size(); i++) {
-                JoinInfo ji = joinList.get(i);
-
-                String cleanOn = ji.joinCondition;
-                if (cleanOn == null) cleanOn = "";
-
-                cleanOn = cleanOn
-                        .replace("]", ")")
-                        .replace("[", "(")
-                        .replace(":-.", "")
-                        .replace(":-", "")
-                        .replaceAll("#\\d+", "")
-                        .replaceAll("=\\s*:", "=")
-                        .trim();
-
-                queryBuilder.append(" ")
-                        .append(ji.joinType).append(" ")
-                        .append(ji.table).append(safeAlias(ji.alias))
-                        .append(" ").append(ON).append(" ").append(cleanOn);
-            }
-        }
-
-
         // EXPLODE -> UNNEST
         if (!explodeColumn.isEmpty()) {
             queryBuilder.append(", UNNEST(")
@@ -185,23 +151,16 @@ public class SelectConverter extends PlanVisitor {
 
         alias = alias.trim();
 
-        // FIX 1: Remove all garbage aliases like ":-", "<>", "$anon"
         if (alias.equals(":-") || alias.equals("<>") || alias.matches(".*anon.*")) {
             return "";
         }
-
-        // FIX 2: Remove Spark suffixes like col#12
         alias = alias.replaceAll("#\\d+", "").trim();
 
-        // FIX 3: If alias is empty after cleanup → no alias
         if (alias.isEmpty()) return "";
 
-        // FIX 4: If alias already starts with AS → return it
         if (alias.toUpperCase().startsWith("AS ")) {
             return " " + alias;
         }
-
-        // FIX 5: Normal alias
         return " AS " + alias;
     }
 
@@ -263,6 +222,7 @@ public class SelectConverter extends PlanVisitor {
 
         // Where conditions
         expr = expr.replaceAll("=\\s*(?!')(?!\\d+\\b)([^'=\\s][^,;\\)]*)", "= '$1'");
+
         expr = expr.replaceAll("LIKE\\s*(%?)([^%]+)(%?)", "LIKE '$1$2$3'");
 
         // DATE functions (convert to BigQuery's format)
@@ -303,7 +263,7 @@ public class SelectConverter extends PlanVisitor {
         );
 
         expr = expr.replaceAll("(?i)array\\s*\\(", "[");
-        expr = expr.replaceAll("\\)$", "]");
+
 
         // arithmetic operations (e.g., Age + 10)
         expr = expr.replaceAll("(?i)([a-zA-Z_]\\w*)\\s*(\\+|-|\\*|\\/|%)\\s*(\\d+)", "$1 $2 $3");
@@ -322,7 +282,7 @@ public class SelectConverter extends PlanVisitor {
 
         // Spark LENGTH(ENCODE(x, UTF-8)) → BigQuery BYTE_LENGTH(x)
         expr = expr.replaceAll(
-                "(?i)length\\s*\\(\\s*encode\\s*\\(\\s*([^,]+)\\s*,\\s*['\"]?utf\\s*-?\\s*8['\"]?\\s*\\)\\s*\\)",
+                "(?i)length\\s*\\(\\s*encode\\s*\\(\\s*((?:[^()]+|\\([^()]*\\))*)\\s*,\\s*['\"]?utf\\s*-?\\s*8['\"]?\\s*\\)\\s*\\)",
                 "BYTE_LENGTH($1)"
         );
 
@@ -334,9 +294,14 @@ public class SelectConverter extends PlanVisitor {
 
         // DATE_FORMAT(date, format) → FORMAT_DATE('%B', DATE(date))
         expr = expr.replaceAll(
-                "(?i)date_format\\s*\\(\\s*([^,]+)\\s*,\\s*['\"]?MMMM['\"]?\\s*\\)",
-                "FORMAT_DATE('%B', DATE($1))"
+                "(?i)date_format\\s*\\(\\s*current_date\\s*\\(\\s*\\)\\s*,\\s*['\"]?MMMM['\"]?\\s*\\)",
+                "FORMAT_DATE('%B', CURRENT_DATE())"
         );
+        expr = expr.replaceAll(
+                "(?i)date_format\\s*\\(\\s*((?:[^()]+|\\([^()]*\\))*)\\s*,\\s*['\"]?yyyy-MM-dd['\"]?\\s*\\)",
+                "FORMAT_DATE('%Y-%m-%d', DATE($1))"
+        );
+
 
         // FROM_UTC_TIMESTAMP(ts, UTC) → TIMESTAMP_TRUNC(ts, SECOND)
         expr = expr.replaceAll(
@@ -500,14 +465,4 @@ public class SelectConverter extends PlanVisitor {
             return boundary + " FOLLOWING";
         }
     }
-
-    private final List<JoinInfo> joinList = new ArrayList<>();
-
-    class JoinInfo {
-        String table;
-        String alias;
-        String joinType;
-        String joinCondition;
-    }
-
 }

@@ -220,12 +220,3 @@ HAVING AVG(e.Salary) > 30000
 ORDER BY e.Salary DESC
 LIMIT 10 OFFSET 5;
 
--- ===========================================================
--- 27. Complex Join with Multiple Tables (Employees, Orders, Customers)
--- ===========================================================
-SELECT e.EmployeeID, e.Name, c.CustomerID, c.CustomerName, o.OrderID, o.TotalAmount
-FROM Employees e
-JOIN Orders o ON e.EmployeeID = o.CustomerID
-JOIN Customers c ON o.CustomerID = c.CustomerID
-WHERE e.Age > 30 AND o.TotalAmount > 100
-ORDER BY o.TotalAmount DESC;

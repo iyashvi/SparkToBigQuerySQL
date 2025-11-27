@@ -10,9 +10,7 @@ import com.capstone.transformer.SelectConverter;
 import org.apache.spark.sql.SparkSession;
 import org.springframework.stereotype.Service;
 
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
+import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -38,7 +36,7 @@ public class DataFrameService {
         List<String> warnings = new ArrayList<>();
 
         try {
-            if (dfCode == null || dfCode.isBlank()) {
+            if (Objects.isNull(dfCode) || dfCode.isBlank()) {
                 resp.setBigQuerySql("/* Empty DataFrame code */");
                 return resp;
             }

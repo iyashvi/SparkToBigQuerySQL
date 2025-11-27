@@ -32,7 +32,6 @@ public class SparkPlanService {
         List<String> warnings = new ArrayList<>();
         try {
             tableCreation.createDemoTempViews(); // Test data
-            spark.sql(sparkSql);
 
             String logical = "";
             try {
@@ -46,7 +45,7 @@ public class SparkPlanService {
             System.out.println("Logical Plan ================= " + logical);
             SparkPlanNode root = parser.parse(logical);
 
-            if (root == null) {
+            if (Objects.isNull(root)) {
                 throw new IllegalStateException("Parsed plan is empty — no valid root node found.");
             }
             // 3. Walk nodes using visitor

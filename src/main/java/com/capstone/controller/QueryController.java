@@ -1,10 +1,7 @@
 package com.capstone.controller;
 
 import com.capstone.constants.URLConstants;
-import com.capstone.dto.DataFrameRequest;
-import com.capstone.dto.FileQueryResponse;
-import com.capstone.dto.QueryRequest;
-import com.capstone.dto.QueryResponse;
+import com.capstone.dto.*;
 import com.capstone.service.DataFrameService;
 import com.capstone.service.DfFileService;
 import com.capstone.service.SQLFileService;
@@ -17,7 +14,7 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.File;
-import java.util.List;
+import java.util.*;
 
 @RestController
 @RequestMapping(value = URLConstants.CONVERT_URL)
@@ -29,7 +26,7 @@ public class QueryController {
     private final DfFileService dfFileService;
     private static final Logger log = LoggerFactory.getLogger(QueryController.class);
 
-    public QueryController(SparkPlanService sparkPlanService, SQLFileService sqlFileService, DataFrameService dataFrameService, DfFileService dfFileService) {
+    public QueryController(SparkPlanService sparkPlanService, SQLFileService sqlFileService, DataFrameService dataFrameService, DfFileService dfFileService, AnalysisService analysisService) {
         this.sparkPlanService = sparkPlanService;
         this.sqlFileService = sqlFileService;
         this.dataFrameService = dataFrameService;
@@ -48,11 +45,10 @@ public class QueryController {
     // SQL File
     @PostMapping("/sqlFile")
     public ResponseEntity<List<FileQueryResponse>> translateSqlFile(@RequestParam("file") MultipartFile file) throws Exception {
-        if (file == null || file.isEmpty()) {
+        if (Objects.isNull(file) || file.isEmpty()) {
             return ResponseEntity.badRequest().build();
         }
         log.info("Received file: {}", file.getOriginalFilename());
-        log.info("File size: {}", file.getSize());
         try {
             File tempFile = File.createTempFile("upload_", ".sql");
             file.transferTo(tempFile);
@@ -73,11 +69,10 @@ public class QueryController {
     // DFCode File
     @PostMapping("/dfFile")
     public ResponseEntity<List<FileQueryResponse>> translateDfFile(@RequestParam("file") MultipartFile file) throws Exception {
-        if (file == null || file.isEmpty()) {
+        if (Objects.isNull(file) || file.isEmpty()) {
             return ResponseEntity.badRequest().build();
         }
         log.info("Received file: {}", file.getOriginalFilename());
-        log.info("File size: {}", file.getSize());
         try {
             File tempFile = File.createTempFile("upload_", ".txt");
             file.transferTo(tempFile);

@@ -58,6 +58,7 @@ public class SparkPlanParser {
                 node = new SparkPlanNode(LATERAL_VIEW, col);
                 node.setAlias1(alias);  // store explode alias (ex)
 
+                System.out.println("=====node: " + node);
                 nodes.add(node);
                 continue;
             }
@@ -86,6 +87,8 @@ public class SparkPlanParser {
                 SparkPlanNode selectNode = new SparkPlanNode(SELECT, selectExpr);
                 SparkPlanNode groupNode = new SparkPlanNode(GROUP_BY, groupExpr);
 
+                System.out.println("=====node: " + selectNode);
+                System.out.println("=====node: " + groupNode);
                 nodes.add(selectNode);
                 nodes.add(groupNode);
                 continue;
@@ -126,7 +129,7 @@ public class SparkPlanParser {
         {
             for (SparkPlanNode n : nodes) {
                 if (n.getNodeType().equals(type)) {
-                    if (root == null) {
+                    if (Objects.isNull(root)) {
                         root = n;
                         last = root;
                     } else {

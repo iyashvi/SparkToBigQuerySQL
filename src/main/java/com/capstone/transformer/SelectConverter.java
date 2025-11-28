@@ -1,5 +1,6 @@
 package com.capstone.transformer;
 
+import com.capstone.dto.AnalysisResponse;
 import com.capstone.model.SparkPlanNode;
 import com.capstone.parser.PlanVisitor;
 import static com.capstone.constants.Constants.*;
@@ -465,5 +466,145 @@ public class SelectConverter extends PlanVisitor {
         } else {
             return boundary + " FOLLOWING";
         }
+    }
+
+    public AnalysisResponse getAnalysis() {
+        AnalysisResponse response = new AnalysisResponse();
+        queryBuilder.setLength(0);
+
+        // SELECT
+        if (!selectExpr.isEmpty()) {
+            queryBuilder.append(SELECT + SPACE)
+                    .append(transformSelectExprFunction(selectExpr, response));
+        }
+        else if (!fromExpr.isEmpty()) queryBuilder.append(SELECT + "*");
+
+        // JOIN
+        if (!joinTable1.isEmpty()) {
+            queryBuilder.append(SPACE).append(FROM).append(SPACE)
+                    .append(joinTable1).append(safeAlias(joinAlias1));
+
+            if (!joinTable2.isEmpty()) {
+                queryBuilder.append(SPACE)
+                        .append(joinType).append(SPACE)
+                        .append(joinTable2).append(safeAlias(joinAlias2))
+                        .append(SPACE).append(ON).append(SPACE).append(joinOn);
+
+                response.setJoinClauses(
+                        joinTable1 + safeAlias(joinAlias1) + SPACE + joinType + SPACE + joinTable2 + safeAlias(joinAlias2) + SPACE + ON + SPACE + joinOn);
+            }
+        }
+
+        // FROM
+        else if (!fromExpr.isEmpty()) {
+            queryBuilder.append(SPACE + FROM + SPACE).append(fromExpr);
+        }
+
+        // EXPLODE -> UNNEST
+        if (!explodeColumn.isEmpty()) {
+            queryBuilder.append(", UNNEST(")
+                    .append(explodeColumn)
+                    .append(RIGHT_ROUND_BRACKET);
+            if (!explodeAlias.isEmpty()) {
+                queryBuilder.append(ALIAS).append(explodeAlias);
+            }
+        }
+
+        // WHERE
+        if (!whereExpr.isEmpty()) {
+            whereExpr = handleSqlFunctionsAndExpression(whereExpr);
+            queryBuilder.append(SPACE + WHERE + SPACE).append(whereExpr);
+            int count = getCount(whereExpr);
+            response.setWhereClauses(new AbstractMap.SimpleEntry<>(whereExpr,count));
+        }
+
+        // GROUP BY
+        if (!groupExpr.isEmpty()) {
+            queryBuilder.append(SPACE + GROUP_BY + SPACE).append(groupExpr);
+            int count = getCount(groupExpr);
+            response.setGroupByClauses(new AbstractMap.SimpleEntry<>(groupExpr,count));
+        }
+
+        // HAVING
+        if (!havingExpr.isEmpty()) {
+            queryBuilder.append(SPACE + HAVING + SPACE).append(havingExpr);
+        }
+
+        // ORDER BY
+        if (!orderExpr.isEmpty()) {
+            queryBuilder.append(SPACE + ORDER_BY + SPACE).append(orderExpr);
+            int count = getCount(orderExpr);
+            response.setOrderByClauses(new AbstractMap.SimpleEntry<>(orderExpr,count));
+        }
+
+        // LIMIT
+        if (!limitExpr.isEmpty()) {
+            queryBuilder.append(SPACE + LIMIT + SPACE).append(limitExpr);
+        }
+
+        // OFFSET
+        if (!offsetExpr.isEmpty()) {
+            queryBuilder.append(SPACE + OFFSET + SPACE).append(offsetExpr);
+        }
+
+        String result = queryBuilder.append(SEMI_COLON).toString().trim();
+        response.setTargetSQL(result);
+
+        return response;
+    }
+
+    private String transformSelectExprFunction(String expr, AnalysisResponse response) {
+
+        expr = expr.replaceAll(",\\s*\\)", RIGHT_ROUND_BRACKET);
+
+        List<String> parts = splitTopLevel(expr);
+
+        List<String> cleaned = new ArrayList<>();
+        List<String> functions = new ArrayList<>();
+        int count = 0;
+
+        for (String p : parts) {
+            String part = p.trim();
+
+            if (part.contains("windowspecdefinition")) {
+                count++;
+                part = transformWindowFunction(part);
+                functions.add(part);
+            }
+
+            part = handleSqlFunctionsAndExpression(part);
+
+            part = part.replaceAll("(?i)( AS \\w+?)(?:#\\d+|\\d+)\\b", "$1")
+                    .replaceAll("#\\d+", "");
+
+            cleaned.add(part);
+        }
+
+        response.setFunctions(new AbstractMap.SimpleEntry<>(String.join(COMMA + SPACE, functions), count));
+        return String.join(COMMA + SPACE, cleaned);
+    }
+
+    private int getCount(String expr) {
+
+        expr = expr.replaceAll(",\\s*\\)", RIGHT_ROUND_BRACKET);
+
+        int depth = 0;
+        int count = 0;
+        StringBuilder token = new StringBuilder();
+
+        for (char c : expr.toCharArray()) {
+            if (c == '(') depth++;
+            if (c == ')') depth--;
+
+            if ((c == ',' || token.toString().contains("AND") || token.toString().contains("OR")) && depth == 0) {
+                count++;
+                token.setLength(0);
+            } else {
+                token.append(c);
+            }
+        }
+        if (!token.isEmpty()) count++;
+
+        return count;
     }
 }

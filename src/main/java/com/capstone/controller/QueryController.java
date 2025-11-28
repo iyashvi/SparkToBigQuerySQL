@@ -1,5 +1,6 @@
 package com.capstone.controller;
 
+import com.capstone.analysis.AnalysisService;
 import com.capstone.constants.URLConstants;
 import com.capstone.dto.*;
 import com.capstone.service.DataFrameService;
@@ -24,6 +25,7 @@ public class QueryController {
     private final SQLFileService sqlFileService;
     private final DataFrameService dataFrameService;
     private final DfFileService dfFileService;
+    private final AnalysisService analysisService;
     private static final Logger log = LoggerFactory.getLogger(QueryController.class);
 
     public QueryController(SparkPlanService sparkPlanService, SQLFileService sqlFileService, DataFrameService dataFrameService, DfFileService dfFileService, AnalysisService analysisService) {
@@ -31,6 +33,7 @@ public class QueryController {
         this.sqlFileService = sqlFileService;
         this.dataFrameService = dataFrameService;
         this.dfFileService = dfFileService;
+        this.analysisService = analysisService;
     }
 
     // Spark SQL to BigQuery
@@ -81,5 +84,14 @@ public class QueryController {
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
         }
+    }
+
+    // Analysis List
+    @PostMapping("/analysis")
+    public ResponseEntity<List<AnalysisResponse>> analysisReport(@RequestBody QueryRequest request) throws Exception {
+        String query = request.getSparkSql();
+        log.info("======== Analysis of Provided Spark SQL: {} ========", query);
+        List<AnalysisResponse> response = analysisService.analysisReport(query);
+        return ResponseEntity.ok(response);
     }
 }

@@ -18,17 +18,15 @@ public class SparkPlanService {
     private final TableCreation tableCreation;
     private final SparkPlanExtractor extractor;
     private final SparkPlanParser parser;
-    private final SparkSession spark;
 
-    public SparkPlanService(TableCreation tableCreation, SparkPlanExtractor extractor, SparkPlanParser parser, SparkSession sparkSession) {
+    public SparkPlanService(TableCreation tableCreation, SparkPlanExtractor extractor, SparkPlanParser parser) {
         this.tableCreation = tableCreation;
         this.extractor = extractor;
         this.parser = parser;
-        this.spark = sparkSession;  // Spring injects the SparkSession bean defined in SparkConfig
     }
 
     public FileQueryResponse translateSql(String sparkSql) {
-        FileQueryResponse resp = new FileQueryResponse();
+        FileQueryResponse response = new FileQueryResponse();
         List<String> warnings = new ArrayList<>();
         try {
             tableCreation.createDemoTempViews(); // Test data
@@ -36,7 +34,7 @@ public class SparkPlanService {
             String logical = "";
             try {
                 logical = extractor.extractLogicalPlan(sparkSql);
-                resp.setLogicalPlanText(logical);
+                response.setLogicalPlanText(logical);
             }
             catch (Exception e) {
                 warnings.add("Error extracting Spark plans: " + e.getMessage());
@@ -57,14 +55,14 @@ public class SparkPlanService {
             String bigQuerySql = converter.getQuery();
             System.out.println("BigQuery ================= " + bigQuerySql);
 
-            resp.setBigQuerySql(bigQuerySql);
+            response.setBigQuerySql(bigQuerySql);
         }
         catch (Exception e) {
             warnings.add("Error while analyzing query: " + e.getMessage());
-            resp.setBigQuerySql("/* translation failed: " + e.getMessage() + " */");
+            response.setBigQuerySql("/* translation failed: " + e.getMessage() + " */");
         }
 
-        resp.setWarnings(warnings);
-        return resp;
+        response.setWarnings(warnings);
+        return response;
     }
 }

@@ -38,8 +38,8 @@ public class QueryController {
     public ResponseEntity<FileQueryResponse> translateQuery(@RequestBody QueryRequest request) throws Exception {
         String query = request.getSparkSql();
         log.info("======== BigQuery SQL Conversion for Spark SQL: {} ========", query);
-        FileQueryResponse resp = sparkPlanService.translateSql(query);
-        return ResponseEntity.ok(resp);
+        FileQueryResponse response = sparkPlanService.translateSql(query);
+        return ResponseEntity.ok(response);
     }
 
     // SQL File

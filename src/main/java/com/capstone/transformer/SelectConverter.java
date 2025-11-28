@@ -1,6 +1,5 @@
 package com.capstone.transformer;
 
-import com.capstone.dto.AnalysisResponse;
 import com.capstone.model.SparkPlanNode;
 import com.capstone.parser.PlanVisitor;
 import static com.capstone.constants.Constants.*;

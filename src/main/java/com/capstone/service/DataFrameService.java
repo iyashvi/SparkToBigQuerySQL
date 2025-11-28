@@ -7,7 +7,6 @@ import com.capstone.model.SparkPlanNode;
 import com.capstone.parser.PlanWalker;
 import com.capstone.parser.SparkPlanParser;
 import com.capstone.transformer.SelectConverter;
-import org.apache.spark.sql.SparkSession;
 import org.springframework.stereotype.Service;
 
 import java.util.*;
@@ -22,23 +21,21 @@ public class DataFrameService {
     private final TableCreation tableCreation;
     private final SparkPlanExtractor extractor;
     private final SparkPlanParser parser;
-    private final SparkSession spark;
 
-    public DataFrameService(TableCreation tableCreation, SparkPlanExtractor extractor, SparkPlanParser parser, SparkSession spark) {
+    public DataFrameService(TableCreation tableCreation, SparkPlanExtractor extractor, SparkPlanParser parser) {
         this.tableCreation = tableCreation;
         this.extractor = extractor;
         this.parser = parser;
-        this.spark = spark;
     }
 
     public FileQueryResponse evaluateDataFrame(String dfCode) {
-        FileQueryResponse resp = new FileQueryResponse();
+        FileQueryResponse response = new FileQueryResponse();
         List<String> warnings = new ArrayList<>();
 
         try {
             if (Objects.isNull(dfCode) || dfCode.isBlank()) {
-                resp.setBigQuerySql("/* Empty DataFrame code */");
-                return resp;
+                response.setBigQuerySql("/* Empty DataFrame code */");
+                return response;
             }
 
             // STEP 1: Convert to Spark SQL
@@ -46,11 +43,10 @@ public class DataFrameService {
             System.out.println("Generated Spark SQL: " + sparkSql);
 
             tableCreation.createDemoTempViews(); // Test data
-            spark.sql(sparkSql);
 
             // STEP 4: Extract plans
             String logical = extractor.extractLogicalPlan(sparkSql);
-            resp.setLogicalPlanText(logical);
+            response.setLogicalPlanText(logical);
 
             System.out.println("Logical Plan ================= " + logical);
 
@@ -60,15 +56,15 @@ public class DataFrameService {
             SelectConverter converter = new SelectConverter();
             walker.walk(root, converter);
 
-            resp.setBigQuerySql(converter.getQuery());
+            response.setBigQuerySql(converter.getQuery());
         }
         catch (Exception e) {
             warnings.add("Error while evaluating DataFrame: " + e.getMessage());
-            resp.setBigQuerySql("/* translation failed: " + e.getMessage() + " */");
+            response.setBigQuerySql("/* translation failed: " + e.getMessage() + " */");
         }
 
-        resp.setWarnings(warnings);
-        return resp;
+        response.setWarnings(warnings);
+        return response;
     }
     private String convertDataFrameToSql(String code) {
         code = code.replace("\n", " ").replace("\\", "").trim();
@@ -159,7 +155,7 @@ public class DataFrameService {
         Matcher lim = Pattern.compile("limit\\((.*?)\\)").matcher(code);
         if (lim.find()) limit = lim.group(1).trim();
 
-      //      OFFSET
+        // OFFSET
         Matcher off = Pattern.compile("offset\\((.*?)\\)").matcher(code);
           if (off.find()) offset = off.group(1).trim();
 
@@ -199,7 +195,7 @@ public class DataFrameService {
         // ORDER BY
         if (orderBy != null) sql.append(" ORDER BY ").append(orderBy);
 
- //LIMIT + OFFSET
+        //LIMIT + OFFSET
         if (limit != null) sql.append(" LIMIT ").append(limit);
         if (offset != null) sql.append(" OFFSET ").append(offset);
 
@@ -228,7 +224,5 @@ public class DataFrameService {
         }
         return -1;
     }
-
-
 
 }

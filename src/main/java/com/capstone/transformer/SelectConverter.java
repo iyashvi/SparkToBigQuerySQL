@@ -32,7 +32,7 @@ public class SelectConverter extends PlanVisitor {
 
     @Override
     public void visit(SparkPlanNode node) {
-        if (node == null) return;
+        if (Objects.isNull(node)) return;
 
         System.out.println(node);
 
@@ -88,14 +88,14 @@ public class SelectConverter extends PlanVisitor {
 
         // JOIN
         if (!joinTable1.isEmpty()) {
-            queryBuilder.append(" ").append(FROM).append(" ")
+            queryBuilder.append(SPACE).append(FROM).append(SPACE)
                     .append(joinTable1).append(safeAlias(joinAlias1));
 
             if (!joinTable2.isEmpty()) {
-                queryBuilder.append(" ")
-                        .append(joinType).append(" ")
+                queryBuilder.append(SPACE)
+                        .append(joinType).append(SPACE)
                         .append(joinTable2).append(safeAlias(joinAlias2))
-                        .append(" ").append(ON).append(" ").append(joinOn);
+                        .append(SPACE).append(ON).append(SPACE).append(joinOn);
             }
         }
 
@@ -108,7 +108,7 @@ public class SelectConverter extends PlanVisitor {
         if (!explodeColumn.isEmpty()) {
             queryBuilder.append(", UNNEST(")
                     .append(explodeColumn)
-                    .append(")");
+                    .append(RIGHT_ROUND_BRACKET);
             if (!explodeAlias.isEmpty()) {
                 queryBuilder.append(ALIAS).append(explodeAlias);
             }
@@ -149,7 +149,7 @@ public class SelectConverter extends PlanVisitor {
     }
 
     private String safeAlias(String alias) {
-        if (alias == null) return "";
+        if (Objects.isNull(alias)) return "";
 
         alias = alias.trim();
 
@@ -161,7 +161,7 @@ public class SelectConverter extends PlanVisitor {
         if (alias.isEmpty()) return "";
 
         if (alias.toUpperCase().startsWith("AS ")) {
-            return " " + alias;
+            return SPACE + alias;
         }
         return ALIAS + alias;
     }
@@ -169,6 +169,7 @@ public class SelectConverter extends PlanVisitor {
 
     private String transformSelectExpr(String expr) {
 
+        System.out.println("SELECT: " + expr);
         expr = expr.replaceAll(",\\s*\\)", RIGHT_ROUND_BRACKET);
 
         List<String> parts = splitTopLevel(expr);
@@ -177,6 +178,7 @@ public class SelectConverter extends PlanVisitor {
 
         for (String p : parts) {
             String part = p.trim();
+            System.out.println("Part 1: " + part);
 
             if (part.contains("windowspecdefinition")) {
                 part = transformWindowFunction(part);
@@ -187,6 +189,7 @@ public class SelectConverter extends PlanVisitor {
             part = part.replaceAll("(?i)( AS \\w+?)(?:#\\d+|\\d+)\\b", "$1")
                     .replaceAll("#\\d+", "");
 
+            System.out.println("Part 2: " + part);
             cleaned.add(part);
         }
 
@@ -220,7 +223,7 @@ public class SelectConverter extends PlanVisitor {
 
 
     private String handleSqlFunctionsAndExpression(String expr) {
-        if (expr == null || expr.isBlank()) return expr;
+        if (Objects.isNull(expr) || expr.isBlank()) return expr;
 
         // Where conditions
         expr = expr.replaceAll("=\\s*(?!')(?!\\d+\\b)([^'=\\s][^,;\\)]*)", "= '$1'");
@@ -359,7 +362,6 @@ public class SelectConverter extends PlanVisitor {
 
     private String transformWindowFunction(String expr) {
 
-        System.out.println("Expr: " + expr);
         String funcName = expr.substring(0, expr.indexOf('(')).toUpperCase().trim();
         String restOfExpression = expr.substring(expr.indexOf('('), expr.indexOf("windowspecdefinition")).trim();
         String func = funcName + restOfExpression;
@@ -372,15 +374,8 @@ public class SelectConverter extends PlanVisitor {
                 .replaceAll(",\\s*,", COMMA)
                 .replaceAll(",\\s*$", "");
 
-        System.out.println("Spec: " + spec);
-
         // Splitting window spec into PARTITION BY and ORDER BY and FRAME parts
         List<String> args = splitTopLevel(spec);
-
-        for(String a : args) {
-            System.out.print("Args: " + a.trim() + ", ");
-        }
-        System.out.println();
 
         String partition = "";
         String order = "";
